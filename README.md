@@ -33,8 +33,13 @@ Demo accounts (password `demo1234`):
 1. `docs/000-founding-decisions.md` — the business case, the four structural decisions, the 90-day pilot, the kill criteria
 2. `docs/002-master-framework.md` — **the operating system**: constitution, strategy bets, metric tree, four quarterly fights, cadence, capital, people, risk
 3. `docs/001-platform-architecture.md` — what was built, the domain model, and the path to production
-4. `docs/registers/` — the living truth: decisions, assumptions, risks
-5. `model/afrikart-unit-economics.xlsx` — the break-even model (21 orders/day in Gaborone)
+4. `docs/003-production-stack.md` — the production stack decision: WordPress vs React, and why the answer is neither
+5. `docs/registers/` — the living truth: decisions, assumptions, risks
+6. `model/afrikart-unit-economics.xlsx` — the break-even model (21 orders/day in Gaborone)
+
+`db/schema.sql` is the production data model — money in integer thebe, a double-entry append-only
+ledger that balances by constraint, inventory derived from movements, and a `route_weekly_pnl` view
+that answers whether the business actually works.
 
 Two kinds of document here, deliberately kept apart: the **framework** is stable and changes by
 version; the **registers** change weekly. If they disagree, the register is right and the framework
@@ -58,6 +63,7 @@ needs a new version.
 | `docs/registers/` | Living registers — decisions, assumptions, risks. |
 | `docs/templates/` | Meeting templates that the cadence runs on. |
 | `product/` | The application — React + Vite front end, Express API. |
+| `db/` | Production database schema. Stack-independent — correct for any framework. |
 | `model/` | Financial models. `afrikart-unit-economics.xlsx` is the live one. |
 | `scripts/` | Generators, so models stay reproducible and reviewable in git. |
 

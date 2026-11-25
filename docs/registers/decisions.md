@@ -103,6 +103,43 @@ reconciliation query.
 
 ---
 
+## D-005 · Production stack: Next.js + Postgres (Supabase) + licensed PSP
+
+| | |
+|---|---|
+| **Status** | Recommended — awaiting sign-off |
+| **Date** | 2025-11 |
+| **Decided by** | Founders |
+| **Reversal date** | If no competent builder is contracted within 30 days |
+
+**Decision.** Build production on server-rendered React (Next.js) against PostgreSQL on Supabase,
+with payments through a Bank of Botswana licensed provider using hosted fields. Own the ledger,
+inventory and delivery routing; buy payments, auth, hosting, email and search. Full reasoning,
+comparison and migration plan in `docs/003-production-stack.md`; the data model is committed as
+`db/schema.sql`.
+
+**Rejected.**
+- *WordPress + WooCommerce + Dokan:* cheapest and fastest, but the two things that make this business
+  worth anything — seller settlement accounting and route-level delivery — are exactly what it cannot
+  do well. We would write custom PHP for our moat, on the most attacked CMS in the internet, with a
+  plugin stack that breaks on update.
+- *Shopify + multivendor app:* excellent single-seller store, poor marketplace. No Shopify Payments in
+  Botswana means every transaction carries an extra gateway fee on an already thin margin.
+- *Medusa / Saleor:* good foundations, second choice. An opinionated model we would fight on
+  settlements, plus a learning curve we cannot afford in a four-week migration.
+- *Client-rendered SPA (the prototype's runtime):* serves an empty div to a crawler and no preview at
+  all to WhatsApp. In a market where the product link is shared in a WhatsApp group before it is
+  googled, that is a distribution failure.
+
+**Why.** Money needs transactions and constraints; a marketplace needs SEO and link previews; and the
+moat must be ours. See `003` §3 for the scoring.
+
+**What would reverse it.** If no senior full-stack engineer can be contracted in 30 days, open a
+single-vendor Shopify store with 20 SKUs to buy demand evidence cheaply — and still do not put seller
+settlements on plugins.
+
+---
+
 ## Template for the next entry
 
 ```
