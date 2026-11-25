@@ -364,6 +364,9 @@ create table ledger_entries (
   id             bigserial primary key,
   transaction_id uuid not null references ledger_transactions(id) on delete restrict,
   account_code   text not null references chart_of_accounts(code),
+  -- Optional dimension. Without this, seller payable cannot be derived and we
+  -- would be back to maintaining a balance column that drifts.
+  seller_id      uuid references sellers(id),
   debit_minor    bigint not null default 0 check (debit_minor  >= 0),
   credit_minor   bigint not null default 0 check (credit_minor >= 0),
   currency       char(3) not null default 'BWP',
@@ -375,6 +378,7 @@ create table ledger_entries (
 );
 create index on ledger_entries (account_code, created_at);
 create index on ledger_entries (transaction_id);
+create index on ledger_entries (seller_id, account_code) where seller_id is not null;
 create trigger ledger_entries_immutable before update or delete on ledger_entries
   for each row execute function forbid_mutation();
 
@@ -398,16 +402,15 @@ create constraint trigger ledger_must_balance
   deferrable initially deferred
   for each row execute function assert_ledger_balances();
 
--- Everything we owe a seller, right now, derived — never stored.
+-- Everything we owe a seller, right now, derived — never stored as a column.
 create view seller_balances as
 select
-  s.id as seller_id,
+  s.id                                as seller_id,
   s.trading_name,
-  coalesce(sum(e.credit_minor - e.debit_minor) filter (where e.account_code = '2010'), 0) as payable_minor
+  coalesce(sum(e.credit_minor - e.debit_minor), 0) as payable_minor
 from sellers s
-left join order_items oi on oi.seller_id = s.id
-left join ledger_transactions lt on lt.ref_id = oi.order_id and lt.ref_type = 'order'
-left join ledger_entries e on e.transaction_id = lt.id
+left join ledger_entries e
+  on e.seller_id = s.id and e.account_code = '2010'
 group by s.id, s.trading_name;
 
 -- ---------------------------------------------------------------------------
@@ -607,22 +610,42 @@ create index on outbox_events (created_at) where published_at is null;
 -- Contribution per route per week. If this is healthy, the business is healthy.
 -- ---------------------------------------------------------------------------
 create view route_weekly_pnl as
+with base as (
+  select
+    d.route_id,
+    date_trunc('week', coalesce(d.delivered_at, d.first_attempt_at, d.created_at)) as week,
+    d.order_id,
+    d.status,
+    d.cash_collected_minor
+  from deliveries d
+  where d.route_id is not null and d.status in ('delivered', 'failed')
+),
+agg as (
+  select
+    route_id,
+    week,
+    count(*) filter (where status = 'delivered')                       as drops,
+    count(*) filter (where status = 'failed')                          as failed_drops,
+    round(100.0 * count(*) filter (where status = 'delivered')
+          / nullif(count(*), 0), 1)                                    as first_attempt_pct,
+    coalesce(sum(cash_collected_minor), 0)                             as cash_collected_minor,
+    array_agg(distinct order_id)                                       as order_ids
+  from base
+  group by route_id, week
+)
 select
-  r.id                                as route_id,
-  r.name                              as route_name,
-  date_trunc('week', d.delivered_at)  as week,
-  count(*) filter (where d.status = 'delivered')            as drops,
-  count(*) filter (where d.status = 'failed')               as failed_drops,
-  round(100.0 * count(*) filter (where d.status = 'delivered')
-        / nullif(count(*), 0), 1)                           as first_attempt_pct,
-  coalesce(sum(o.subtotal_minor), 0)                        as gmv_minor,
-  coalesce(sum(o.delivery_minor), 0)                        as delivery_revenue_minor,
-  coalesce(sum(oi.commission_minor), 0)                     as commission_minor,
-  coalesce(sum(oi.fulfilment_minor), 0)                     as fulfilment_minor,
-  coalesce(sum(d.cash_collected_minor), 0)                  as cash_collected_minor
-from routes r
-join deliveries d on d.route_id = r.id
-join orders o     on o.id = d.order_id
-left join order_items oi on oi.order_id = o.id
-where d.delivered_at is not null
-group by r.id, r.name, date_trunc('week', d.delivered_at);
+  a.route_id,
+  r.name                                                            as route_name,
+  a.week,
+  a.drops,
+  a.failed_drops,
+  a.first_attempt_pct,
+  -- summed separately: order-level and line-level money must never be joined
+  -- to each other, or every total is multiplied by the number of line items.
+  coalesce((select sum(o.subtotal_minor)  from orders o      where o.id  = any(a.order_ids)), 0) as gmv_minor,
+  coalesce((select sum(o.delivery_minor)  from orders o      where o.id  = any(a.order_ids)), 0) as delivery_revenue_minor,
+  coalesce((select sum(oi.commission_minor)  from order_items oi where oi.order_id = any(a.order_ids)), 0) as commission_minor,
+  coalesce((select sum(oi.fulfilment_minor)  from order_items oi where oi.order_id = any(a.order_ids)), 0) as fulfilment_minor,
+  a.cash_collected_minor
+from agg a
+join routes r on r.id = a.route_id;
