@@ -1,4 +1,4 @@
-# Afrikart platform — B1, The Till
+# Afrikart platform — B2, The Till and The Shelf
 
 The production application. Not the prototype (`product/`), not a demo: this is the code that
 takes a payment, writes an order that cannot half-exist, and keeps books that balance by
@@ -13,7 +13,7 @@ npm install
 npm run migrate          # db/schema.sql → the database
 npm run seed:demo        # one seller, three SKUs, one route, three addresses
 npm start                # API on 0.0.0.0:4000
-npm test                 # 51 tests against real PostgreSQL 16
+npm test                 # 64 tests against real PostgreSQL 16
 ```
 
 ## What it runs on
@@ -59,6 +59,11 @@ npm test                 # 51 tests against real PostgreSQL 16
 | POST | `/api/ops/orders/{number}/refund` | line-level, `store_credit` or `original_method` |
 | POST | `/api/ops/refunds/{id}/complete` | settles an off-platform reversal |
 | GET | `/api/ops/ledger` | trial balance + `balanced: true/false` |
+| GET | `/api/catalogue` | the customer shelf: no costs, no stock numbers, no seller contact |
+| GET | `/api/ops/shelf` | price, landed cost, seller spread, on hand, `sellersUnderwater` |
+| POST | `/api/ops/products/{id}/publish` | refuses an uncosted SKU, a missing photo, an unlicensed category |
+| POST | `/api/ops/purchase-orders/{number}/receive` | stock + movements + ledger in one transaction |
+| GET | `/api/ops/margin` | realised margin per delivered order |
 
 Errors always use the envelope from `docs/spec/api-contract.md`:
 `{ "error": { "code", "message", "field?", "request_id" } }`.
@@ -111,7 +116,7 @@ src/
   refunds.js        two channels, exact reversal, restock rules
   invoice.js        immutable VAT invoice
   server.js         the API
-test/               51 tests: money, ledger, orders, payments, refunds, HTTP
+test/               64 tests: money, ledger, orders, payments, refunds, shelf, HTTP
 ```
 
 ## The two bugs this harness found on day one
