@@ -1,4 +1,4 @@
-# Build Phases v1.0 — the execution spine
+# Build Phases v1.1 — the execution spine
 
 **One numbering, from today to regional expansion.** Fourteen phases. Each has an entry condition, a
 deliverable, an exit gate, a cash cost and a single metric that must move.
@@ -11,9 +11,24 @@ deliverable, an exit gate, a cash cost and a single metric that must move.
    Work-in-progress limit is one. That is the whole discipline.
 
 **A note on dates, honestly:** `002-master-framework.md` placed gate G1 at month 3. With a contracted
-professional build, the earliest credible G1 is **month 5**. One of those two statements has to give.
-This document uses month 5, and the framework should be revised to v1.1 rather than leaving two
-contradictory plans in the repo. A plan that disagrees with itself is worse than a late plan.
+professional build, the earliest credible G1 is **month 5**. One of those two statements had to give.
+The framework is now v1.2 and agrees with this document. A plan that disagrees with itself is worse
+than a late plan.
+
+**v1.1 revision (this version).** `006-amazon-gap-analysis.md` found four things this spine got wrong
+and they are corrected here:
+
+- **Third-party fulfilment moves P12 → P10.** It is the only high-margin line available to us, and it
+  fills the density gap that makes months 1–6 lose money. Deferring it to month 10 was the single most
+  expensive sequencing error in v1.0. `[A4]`
+- **A route has a hard daily capacity** and checkout publishes a next-available date. Marketing cannot
+  talk a rider into 30 drops. `[A6]`
+- **The engineer line is priced, not assumed away.** See §5 — at pilot volumes a P35–55k/month hire
+  roughly doubles the funding requirement. `[A5]`
+- **The cash trough is part of the plan, not a surprise.** P114,000 between month 1 and month 6. §5 now
+  carries it. `[A1]`
+
+`[A#]` references point at the numbered amendments in `006` §5.
 
 ---
 
@@ -32,9 +47,9 @@ contradictory plans in the repo. A plan that disagrees with itself is worse than
 | **P7** | Admin & Ops | 11–12 | M3 | — | P5k |
 | **P8** | Hardening & Launch | 12–13 | M3 | **Launch** | P4k |
 | **P9** | **Trading pilot** *(builds nothing)* | — | M3.5–5 | **G1** | P40k |
-| **P10** | Retention | — | M5–7 | **G2** | P60k |
+| **P10** | Retention **+ third-party fulfilment** `[A4]` | — | M5–7 | **G2** | P70k |
 | **P11** | Marketplace scale | — | M7–10 | **G3** | P120k |
-| **P12** | Distribution & B2B | — | M10–13 | **G4** | P180k |
+| **P12** | Distribution & B2B at scale | — | M10–13 | **G4** | P180k |
 | **P13** | Regional | — | Year 2 | **G5** | — |
 
 ```
@@ -185,7 +200,15 @@ you can account for.
 
 **Deliverables:** pick and pack with scan confirmation · **rider PWA that works offline** · delivery
 transitions with **mandatory reason codes** · proof of delivery photo · daily cash reconciliation with
-float limits · customer tracking page.
+float limits · customer tracking page · **a hard daily capacity per route with a published
+next-available date** `[A6]`.
+
+**The capacity rule** `[A6]`. Every route stores `daily_capacity` (default 22) and
+`route_capacity_remaining()` is called at checkout. When today's route is full the customer is offered
+tomorrow — never silently accepted. Pickup points are the overflow valve. The rule is not a courtesy to
+the rider: at 30 drops a route runs past eleven hours, first-attempt success falls, and the second
+failure costs more than the order earned. **An order we cannot deliver on time is worse than an order
+we did not take.**
 
 **Exit evidence**
 - One real delivery completed with a proof photo visible to the customer.
@@ -268,10 +291,23 @@ Everything else goes on a "not now" list.
 - First-attempt success ≥ 85%.
 - 300 completed orders.
 - Cash reconciled daily with zero unexplained variance.
+- **Cash conversion cycle measured and ≤ 25 days**, with a named owner. Reported from the `cash_cycle`
+  view, not from a spreadsheet someone keeps privately. `[A2]`
+- **Density climbing week over week** — the absolute number matters less than its direction. `[A1]`
+- **Route capacity utilisation ≤ 85%** on the days we want to sell into. `[A6]`
 - ≥ 8 of the 15 assumptions in the register closed.
 
-**The decision at G1:** proceed · change category · stop. Stopping here costs ~P370k. Stopping at
-month 12 costs ~P2m and a reputation. **This is the cheapest exit you will ever be offered.**
+**The decision at G1 — continue / re-scope / stop** `[A10]`. Re-scope is the *expected* outcome, not a
+failure: the pilot's job is to find the one wrong variable. Full definitions in `002` Q1.
+
+| Outcome | Trigger | What happens next |
+|---|---|---|
+| Continue | Contribution > P0 for 3 weeks, 1st-attempt ≥ 85%, density rising | P10 as written |
+| **Re-scope** | Directionally right, one variable wrong (category, price band, suburb, bundle) | Change one variable, re-run a 45-day G1 |
+| Stop | Contribution negative **and** density flat **and** 1st-attempt < 80% after two cycles | Return capital |
+
+Stopping here costs ~P370k. Stopping at month 12 costs ~P2m and a reputation. **This is the cheapest
+exit you will ever be offered.**
 
 ---
 
@@ -282,10 +318,22 @@ month 12 costs ~P2m and a reputation. **This is the cheapest exit you will ever 
 
 **Build:** cohort tracking and CRM segments · bundles and threshold testing infrastructure ·
 subscription billing for nappies and formula · referral programme with two-sided credit ·
-three published delivery scorecards.
+three published delivery scorecards · **third-party fulfilment, deliberately small** `[A4]`.
+
+**Third-party fulfilment — why it starts here and not at P12** `[A4]`. At 20 orders a day a route is
+running at half capacity, and half an empty route is the most expensive thing we own. Three
+non-competing retailers (a pharmacy, a salon supplier, a hardware shop) putting 5–15 parcels a day on
+that route does two things at once: it lifts drops/day from 20 to 28 — straight down the density curve,
+P15 to P12 per drop — and it earns a per-parcel fee on capacity we have already paid for. This is our
+FBA. It is not a fulfilment centre, it is a spreadsheet, a shelf, and a rider with room. Waiting until
+month 10 to sell spare capacity was the costliest error in v1.0.
+
+Deliberately small at this stage: fixed collection windows (10:00–12:00), one rate card, no integration,
+no seller portal. Three customers, invoiced monthly.
 
 **Exit evidence for G2:** 30-day repeat ≥ 25% · AOV ≥ P350 sustained four weeks · ≥ 15% of new customers
-from referral · ≥ 40 active subscriptions.
+from referral · ≥ 40 active subscriptions · **third-party parcels ≥ 5% of route volume**, priced above
+marginal cost.
 
 **The decision at G2:** the repeat number is the verdict on the category, not on the marketing.
 
@@ -310,15 +358,16 @@ on-time payout runs · pickup ≥ 20% of orders · route 2 contribution-positive
 > **Objective:** prove the model is a system, not a founder's habit.
 
 **Build:** B2B trade accounts with terms and price breaks · standing-order and purchase-order flow ·
-**third-party fulfilment service** (other retailers' parcels on our routes) · city 2 launch · ops manual
-written from real logs.
+**third-party fulfilment scaled from 3 to 10 retailers on standing contracts** (started at P10) · city 2
+launch · ops manual written from real logs.
 
 **Exit evidence for G4:** a new hire runs a route unsupervised for two weeks · 10 B2B accounts with
-basket ≥ P1,800 and 60% weekly repeat · third-party parcels ≥ 5% of route volume · city 2 breaks even on
-contribution per order within 90 days.
+basket ≥ P1,800 and 60% weekly repeat · **third-party parcels ≥ 15% of route volume and ≥ 25% of route
+contribution** · city 2 breaks even on contribution per order within 90 days.
 
 **Why this is the important one:** third-party parcels are the first real evidence that the delivery
-network is worth renting. That, not the storefront, is the empire thesis.
+network is worth renting. That, not the storefront, is the empire thesis — and by P12 it should already
+be a line in the P&L, not a pilot.
 
 ---
 
@@ -364,10 +413,10 @@ A gate is not a feeling. At each gate, these artifacts must exist **before** the
 | Gate | Evidence pack | Register entry required |
 |---|---|---|
 | **Launch** | UAT signed, restore timed, monitoring live, legal pages up | Decision: launch on this date |
-| **G1** | 300 orders, contribution trend, first-attempt trend, cash recon log, 8 closed assumptions | Decision: continue / change category / stop |
-| **G2** | Cohort table, AOV trend, referral share, subscription count, 3 scorecards shipped | Decision: confirm category |
-| **G3** | 10 sellers, 3P GMV share, payout run log, pickup share, route 2 P&L | Decision: scale marketplace |
-| **G4** | Unsupervised route proof, B2B cohort, third-party parcel share, city 2 P&L | Decision: open city 3 or go regional |
+| **G1** | 300 orders, contribution trend, first-attempt trend, cash recon log, **cash cycle ≤ 25d**, **density trend**, **capacity utilisation**, 8 closed assumptions | Decision: continue / re-scope / stop |
+| **G2** | Cohort table, AOV trend, referral share, subscription count, 3 scorecards shipped, **third-party parcels ≥ 5% of volume** | Decision: confirm category |
+| **G3** | 10 sellers, 3P GMV share, **prepaid ≥ 70%**, payout run log, pickup share, route 2 P&L | Decision: scale marketplace |
+| **G4** | Unsupervised route proof, B2B cohort, **third-party ≥ 15% of volume and ≥ 25% of route contribution**, city 2 P&L | Decision: open city 3 or go regional |
 | **G5** | 12 months profitable, ops manual, city manager trained | Decision: country 2 |
 
 ---
@@ -381,8 +430,25 @@ A gate is not a feeling. At each gate, these artifacts must exist **before** the
 | P4 Money | P54,000 | P160,000 |
 | P5–P8 Fulfilment, Seller, Admin, Hardening | P45,000 | P205,000 |
 | Inventory and working capital float | P80,000 | P285,000 |
-| P9 Trading pilot (8 weeks of fixed ops + marketing) | P40,000 | **P325,000** |
+| P9 Trading pilot (8 weeks of incremental pilot spend) | P40,000 | **P325,000** |
 | Contingency (20%) | P65,000 | **≈ P390,000** |
+| **Operating losses absorbed M1–M5 (the cash trough)** `[A1]` | P114,000 | **≈ P504,000** |
+| Total if an engineer is hired at M4, low band `[A5]` | +P153,000 of loss | **≈ P657,000** |
+
+**Two lines in that table did not exist in v1.0 and both are real.**
+
+The **P114,000 operating trough** is the cumulative loss the business runs before it turns in month 6
+(`model/afrikart-unit-economics.xlsx` → `Ramp`). It is not build cost and it is not covered by the
+contingency: contingency pays for things going wrong, the trough pays for the months going *right*. What
+makes the pilot expensive is not the software, it is the density we have to buy with time. Read the
+number as **≈P500,000 to reach a business that funds itself**, not P390,000 to open the doors.
+
+The **engineer line** is the honest cost of calling ourselves a technology company. From month 4,
+P35–55k/month over nine months moves the trough from P114,000 to P267,000–P423,000 and pushes
+break-even from month 6 to month 11 — or beyond month 12 at the top of the band. Priced in full on the
+`Ramp` sheet. This is decision **D-008** and it is a founders' decision, not a document's: fund the hire
+and raise P650–800k, run a 40-hour/month retainer, or drop the pillar from the pitch. All three are
+legitimate. Only the unstated version is not.
 
 ### The reconciliation you need to see
 
@@ -404,7 +470,7 @@ Three ways to close the gap, and only three:
    demand while you raise. Keeps the whole architecture for later.
 
 What you must not do is reduce the contingency. **P9 is where the plan meets reality, and P9 is where
-the money runs out if there is no buffer.**
+the money runs out if there is no buffer** — and the trough, not the build, is what empties it.
 
 ---
 
@@ -419,7 +485,9 @@ the money runs out if there is no buffer.**
 5. **Four things are never cut:** idempotent webhooks, the atomic order transaction, mandatory failure
    reason codes, the restore drill.
 6. **P9 builds nothing.** The single most common way a pilot fails is that the team keeps shipping.
-7. **A gate that fails is a result, not a setback.** The framework's tenth commitment applies: we write
+7. **No order is accepted that the route cannot carry.** The capacity cap is a promise, and a promise
+   kept late is not kept.
+8. **A gate that fails is a result, not a setback.** The framework's tenth commitment applies: we write
    down what we believe and the date we will know we were wrong.
 
 ---
@@ -437,6 +505,6 @@ the money runs out if there is no buffer.**
 | P7 Admin & Ops | M6-01 … M6-05 | 5 |
 | P8 Hardening | M7-01 … M7-06 | 6 |
 | **v1 total** | | **51** |
-| P10 Retention | new stories at G1 | ~8 |
+| P10 Retention + 3P fulfilment | new stories at G1 | ~11 |
 | P11 Marketplace | new stories at G2 | ~12 |
-| P12 Distribution | new stories at G3 | ~14 |
+| P12 Distribution & B2B at scale | new stories at G3 | ~14 |

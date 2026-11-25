@@ -1,6 +1,6 @@
 # Build Backlog v1.0
 
-**48 stories across 8 milestones.** Sized S (<1 day), M (1–3 days), L (3–5 days).
+**51 stories across 8 milestones** (6 + 7 + 6 + 9 + 6 + 6 + 5 + 6). Sized S (<1 day), M (1–3 days), L (3–5 days).
 Priorities: **M**ust (blocks launch), **S**hould (launch quality), **C**ould (drop if late).
 
 This is the contract between the founder and the builder. A story is done when its acceptance

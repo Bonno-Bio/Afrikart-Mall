@@ -147,6 +147,12 @@ Test: a Gaborone order, delivered by our own rider on a batched suburb route.
 - **Owned rider, batched:** ~18–20 drops/day at ~P320 all-in daily cost (rider + scooter + fuel + insurance) ≈ **P16–P18 per drop**.
 - **Per-parcel courier:** **P60–P80 per parcel** inside Gaborone.
 
+> **Read the P18 as the mature-density number, not the day-one number.** Cost per drop is rider day
+> cost divided by drops that day: at 5 drops it is P64, at 8 it is P40, at 18 it is P18. The first four
+> months run at two to three times the figure below, and that is the cost of building density rather
+> than a flaw in the plan. `model/afrikart-unit-economics.xlsx` → `Density` and `Ramp` show every level;
+> `002` §3.1 explains why contribution per order and drops/day must always be quoted together.
+
 That gap is the difference between a viable business and a subsidy. It is also the reason to keep the
 delivery zone deliberately small: **density is the product.** Ten drops in Extension 12 cost almost
 nothing extra; ten drops spread across Gaborone, Tlokweng and Mogoditshane do not.
@@ -168,7 +174,7 @@ From the model in `model/afrikart-unit-economics.xlsx` (AOV P380, 30% product ma
 | Product gross profit | P114.00 |
 | Delivery fee collected | P30.00 |
 | **Revenue per order** | **P144.00** |
-| Last mile | (P18.00) |
+| Last mile (at 18–20 drops/day) | (P18.00) |
 | Pick, pack, packaging | (P15.00) |
 | Payment processing (2.5%) | (P9.50) |
 | Returns & breakage (4%) | (P15.20) |

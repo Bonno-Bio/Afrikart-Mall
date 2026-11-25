@@ -10,6 +10,13 @@ each other and against how Amazon's machine actually works, looking for three th
 Twelve pitfalls. Three are fatal. None of them is a reason not to proceed — but every one of them should
 change something in the framework, and §5 lists exactly what.
 
+> **Status: applied.** All twelve amendments are now in the documents: `002` **v1.2**, `005` **v1.1**,
+> `model/afrikart-unit-economics.xlsx` **v2**, `db/schema.sql` (route capacity, catalogue tiers,
+> suppliers and purchase orders, `cash_cycle` and `cod_cash_in_transit` views), `spec/api-contract.md`
+> (tier and capacity-aware quoting), and `registers/decisions.md` **D-006 → D-009**. Every amendment is
+> tagged `[A1]`–`[A12]` at the point where it landed in `002` and `005`, so each one is traceable in both
+> directions. Three are not closable by a document at all — see §7.
+
 ---
 
 ## 0. First, the uncomfortable framing
@@ -372,6 +379,25 @@ Concrete changes, not sentiments. Each maps to a pitfall above.
 > Our framework is excellent at **not dying**, and silent on **how to win** — so the most likely failure
 > is not collapse, it is comfortable, permanent smallness. Fix the three structural pitfalls, decide
 > between company A and company B on purpose, and the rest of this document becomes a maintenance list.
+
+---
+
+## 7. What a document cannot fix
+
+Honesty about the fix is worth more than a longer checklist. Three of the twelve are now *written down*
+and are still not *solved*, because they are behaviour and money, not prose:
+
+| # | Amendment | Applied where | What still has to happen |
+|---|---|---|---|
+| 1 | Density curve | Model v2, `002` §3.1 | The curve has to be *climbed*: 45 days of real drops, weekly, with the number on the wall. A model cannot route a scooter. |
+| 5 | Engineer from M4 | `002` §8, `005` §5, D-008 | **Founders must choose and fund one of three options.** The model prices them; it cannot pick. Unfunded, the correct move is to strike the pillar from the pitch. |
+| 11 | Incumbent response | `002` §10.1, R-08 | Somebody has to actually look, every month, and write "nothing" eleven times a year so that the twelfth is credible. |
+
+And one thing is outside every document in this repo: **the capital has to exist.** The applied plan now
+says ≈P500,000 to reach a self-funding business — P390,000 to open the doors and P114,000 of operating
+loss absorbed before month 6. If that money is not raised, the fix is a better *plan*, not a better
+*document*, and the honest fallback in `005` §5 option 3 (Shopify, 20 SKUs, 60 days, P40,000) is the
+right one to take.
 
 ---
 

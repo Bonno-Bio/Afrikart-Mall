@@ -32,16 +32,16 @@ Demo accounts (password `demo1234`):
 ## Read in this order
 
 1. `docs/000-founding-decisions.md` — the business case, the four structural decisions, the 90-day pilot, the kill criteria
-2. `docs/002-master-framework.md` — **the operating system**: constitution, strategy bets, metric tree, four quarterly fights, cadence, capital, people, risk
+2. `docs/002-master-framework.md` — **the operating system (v1.2)**: constitution, strategy bets, metric tree, density curve, four quarterly fights, cadence, capital, people, risk
 3. `docs/001-platform-architecture.md` — what was built, the domain model, and the path to production
 4. `docs/003-production-stack.md` — the production stack decision: WordPress vs React, and why the answer is neither
 5. `docs/004-build-readiness.md` — **what is still missing before the build starts**, and who owns it
 6. `docs/005-build-phases.md` — **the execution spine: all 14 phases**, gates, cash and dependencies
-7. `docs/006-amazon-gap-analysis.md` — **the twelve ways our own framework caps us**, and the amendments required
-8. `docs/spec/` — the build pack: 48-story backlog, the API contract, and **`delivery.md`** (the logistics spec)
+7. `docs/006-amazon-gap-analysis.md` — **the twelve ways our own framework caps us**, and the amendments — now applied in `002` v1.2 and `005` v1.1
+8. `docs/spec/` — the build pack: 51-story backlog, the API contract, and **`delivery.md`** (the logistics spec)
 9. `docs/hiring/` — the build brief to send contractors, and the PSP question sheet
 10. `docs/registers/` — the living truth: decisions, assumptions, risks
-11. `model/afrikart-unit-economics.xlsx` — the break-even model (21 orders/day in Gaborone)
+11. `model/afrikart-unit-economics.xlsx` — the **v2** model: density curve, 12-month ramp, cash cycle, and what an engineer costs
 
 `db/schema.sql` is the production data model — money in integer thebe, a double-entry append-only
 ledger that balances by constraint, inventory derived from movements, and a `route_weekly_pnl` view

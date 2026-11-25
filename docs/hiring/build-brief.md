@@ -19,7 +19,7 @@ seller settlements and route-level delivery better. That is the whole job.
 | Artifact | Path | What it is |
 |---|---|---|
 | Production schema | `db/schema.sql` | 32 tables, double-entry ledger, constraints. **Treat as authoritative.** |
-| Backlog | `docs/spec/backlog.md` | 48 stories, M0–M7, with acceptance criteria |
+| Backlog | `docs/spec/backlog.md` | 51 stories, M0–M7, with acceptance criteria |
 | API contract | `docs/spec/api-contract.md` | Every endpoint, shape, error code |
 | Framework | `docs/002-master-framework.md` | The business context and the gates |
 | Clickable reference | `product/` | A React prototype. **Reference for flows and visual language only — do not reuse the data layer.** |

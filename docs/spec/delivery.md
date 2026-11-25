@@ -17,7 +17,11 @@ Two numbers justify the entire company:
 |---|---|---|
 | Cost per drop, Gaborone | **P16–18** | **P60–80** |
 
-A P30 delivery fee is a loss at P70 a drop and a contributor at P18. The business case in `000` depends
+A P30 delivery fee is a loss at P70 a drop and a contributor at P18 — and **P18 is only true above
+about 18 drops a day.** At five drops it is P64 and the fee loses P34 a parcel. The density curve in
+`002` §3.1 is the number to hold in your head, not the constant.
+
+The business case in `000` depends
 entirely on batched density, which is why **the route, not the order, is the unit of success**
 (`002` §3.1) and why the schema ships a `route_weekly_pnl` view.
 

@@ -62,6 +62,11 @@ Week 6   PSP approved ──▶ checkout integration
 Week 7   First real P1 order taken end to end
 ```
 
+**B6, which does not block Monday but does block month 5:** *who owns the code after handover.* Left
+undecided, every change after launch is a quoted project, every bug a negotiation, and the "technology
+company" pillar becomes an unfunded claim. The three funded options are priced in `005` §5 and recorded
+as **D-008**; the decision is due before the pilot ends.
+
 **The lesson:** the PSP underwriting runs in parallel with the build, not after it. Companies that
 start the PSP conversation in week 5 lose a month. Start it on **day 2**, quoting against the intended
 company name.
@@ -85,6 +90,7 @@ Nothing here can be delegated to a builder, and every item has a real-world lead
 | 40–60 products photographed to the standard | No photo, no listing — enforced in the database | 1–2 weeks |
 | Storage unit (60–80 m²) + rider + picker | Delivery | 1 week |
 | Appoint accountant (BURS experience) | Compliance calendar | 1 week |
+| **Decide engineer / retainer / drop the pillar (D-008)** | Every post-launch change depends on it; unfunded, the pitch is false | 1 decision, before P9 |
 | Advisory: retail operator, logistics operator | The external check | 2–4 weeks |
 
 ---

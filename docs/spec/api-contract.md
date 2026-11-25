@@ -24,7 +24,7 @@ Every non-2xx response uses the same envelope. **A client never has to guess.**
 | 403 | Authenticated but not permitted (role or ownership) |
 | 404 | Not found, **or not visible to this caller** — never leak existence |
 | 409 | State conflict: stock ran out, order already dispatched, payout already approved |
-| 422 | Business rule violated (COD outside the zone, price changed since cart) |
+| 422 | Business rule violated (COD outside the zone, price changed since cart, **route full on the requested date**) |
 | 429 | Rate limited — includes `Retry-After` |
 | 500 | Our fault. Include `request_id`; never a stack trace |
 
@@ -68,10 +68,23 @@ large sets). No offset pagination on order or ledger tables — it is not stable
 **ProductCard** — the only product shape the list endpoints return:
 ```json
 { "id": "uuid", "title": "…", "brand": "…", "price_minor": 64900, "list_price_minor": 72900,
-  "rating": 4.2, "rating_count": 5, "in_stock": true, "express": true,
+  "rating": 4.2, "rating_count": 5, "in_stock": true,
+  "tier": "express", "express": true, "delivery_estimate_days": 1,
   "category": "baby-mother", "primary_image_url": "…",
   "seller": { "id": "uuid", "name": "MmaTebogo Baby World", "city": "Gaborone" } }
 ```
+
+**`tier` is the honest promise, and it is the only thing the badge means** (`002` §2.1, `db/schema.sql`
+`products.catalog_tier`):
+
+| `tier` | `express` | `delivery_estimate_days` | Shown to the customer |
+|---|---|---|---|
+| `express` | `true` | 1 | "Arrives tomorrow" — badged |
+| `marketplace` | `false` | 3–5 | "Arrives in 3–5 days" — never badged, never promises next day |
+
+`express` is retained as a derived boolean so the existing `?express=1` search filter keeps working.
+A cart is only quoted Express if **every line** is Express; one marketplace line downgrades the whole
+order, and the quote says which line did it.
 
 ### `GET /products/{slug}`
 ```json
@@ -113,12 +126,23 @@ Prices are **always** computed here, never sent by the client.
               "line_subtotal_minor": 129800 }],
   "subtotal_minor": 129800, "vat_minor": 15940,
   "delivery_options": [
-    { "id": "express", "label": "Afrikart Express", "fee_minor": 0, "eta": "Tomorrow, 08:00–13:00" },
-    { "id": "pickup",  "label": "Collect at a pickup point", "fee_minor": 1000, "eta": "Tomorrow after 14:00" }
+    { "id": "express", "label": "Afrikart Express", "fee_minor": 0,
+      "available_date": "2026-11-26", "eta": "Tomorrow, 08:00–13:00",
+      "capacity_limited": false, "next_available_date": "2026-11-26" },
+    { "id": "pickup",  "label": "Collect at a pickup point", "fee_minor": 1000,
+      "available_date": "2026-11-26", "eta": "Tomorrow after 14:00",
+      "capacity_limited": false, "next_available_date": "2026-11-26" }
   ],
   "cod_allowed": true, "free_delivery_threshold_minor": 40000,
   "warnings": [{ "code": "PRICE_CHANGED", "message": "…" }] }
 ```
+
+**Capacity is quoted, not discovered.** `available_date` is computed by
+`route_capacity_remaining(route, date)` (`db/schema.sql`). When today's route is at capacity the quote
+returns `capacity_limited: true`, an `available_date` of the next open day, and a warning
+`{ "code": "NEXT_DAY_OFFERED" }`. `POST /orders` with an explicitly requested date that is full returns
+`422 ROUTE_FULL` with the next available date in `field`. **The system never silently accepts an order it
+cannot deliver on the promised day** — that is the whole point of the promise (`005` P5).
 
 ### `POST /orders` · requires `Idempotency-Key`
 ```json
@@ -144,6 +168,8 @@ Atomic: stock reserved, items snapshotted, ledger posted, invoice issued, or not
 
 ### `POST /orders/{number}/cancel` — only before dispatch → `409` after
 ### `POST /orders/{number}/return` — only after delivery; body `{ "reason": "…", "items": [...] }`
+Resolution is capped at **P300 of goodwill without approval** (`002` §13): the API accepts
+`resolution: "refund" | "replacement" | "credit"` and auto-approves credit up to that amount.
 ### `POST /products/{id}/reviews` — `{ "rating": 1-5, "title": "…", "body": "…" }`
 `is_verified` is derived server-side from a delivered order line. A client-supplied value is ignored.
 ### `GET|POST|DELETE /saved-items`

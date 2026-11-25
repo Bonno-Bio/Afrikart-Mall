@@ -95,6 +95,11 @@ create table sellers (
                         check (fulfilment_mode in ('seller','afrikart')),
   -- Rates are stored on the seller AND snapshotted onto each order line,
   -- so that changing a rate never rewrites history.
+  -- Express tier is a badge, not a gate. Only sellers who can hold stock and
+  -- meet the delivery standard may carry it; everyone else sells in the
+  -- marketplace tier with no Express promise. This separates QUALITY from
+  -- BREADTH, so selection can grow without diluting the promise.
+  can_list_express    boolean not null default false,
   commission_bps      integer not null default 1200 check (commission_bps between 0 and 5000),
   fulfilment_bps      integer not null default 0    check (fulfilment_bps between 0 and 2000),
   status              text not null default 'pending'
@@ -152,13 +157,20 @@ create table products (
   attributes   jsonb not null default '{}'::jsonb,   -- size, colour, capacity...
   status       text not null default 'draft'
                  check (status in ('draft','in_review','live','paused','rejected','archived')),
+  -- Two tiers: 'express' carries the next-day promise and the badge;
+  -- 'marketplace' is long-tail selection that never promises Express.
+  catalog_tier text not null default 'marketplace'
+                 check (catalog_tier in ('express','marketplace')),
   -- A product without a real photograph must not go live. Enforced, not hoped for.
   primary_image_url text,
   search_tsv   tsvector generated always as
                  (to_tsvector('simple', coalesce(title,'') || ' ' || coalesce(brand,'') || ' ' || coalesce(description,''))) stored,
   created_at   timestamptz not null default now(),
   updated_at   timestamptz not null default now(),
-  constraint live_product_needs_image check (status <> 'live' or primary_image_url is not null)
+  constraint live_product_needs_image check (status <> 'live' or primary_image_url is not null),
+  -- The badge is earned: an Express listing must have a photograph and a
+  -- declared parcel weight, because Express pricing and route capacity depend on both.
+  constraint express_needs_photo check (catalog_tier <> 'express' or primary_image_url is not null)
 );
 create index on products (seller_id);
 create index on products (category_id) where status = 'live';
@@ -339,6 +351,73 @@ create table refunds (
 );
 
 -- ---------------------------------------------------------------------------
+-- PROCUREMENT — where the cash cycle is won or lost
+-- Every 30 days of supplier terms is free working capital. It is a negotiated
+-- asset and it gets tracked like one.
+-- ---------------------------------------------------------------------------
+create table suppliers (
+  id                 uuid primary key default gen_random_uuid(),
+  name               text not null,
+  country            char(2) not null default 'BW',   -- 'ZA' for SACU sourcing
+  currency           char(3) not null default 'BWP',
+  payment_terms_days integer not null default 0 check (payment_terms_days between 0 and 120),
+  lead_time_days     integer not null default 7,
+  min_order_minor    bigint not null default 0,
+  contact_name       text,
+  contact_phone      text,
+  contact_email      citext,
+  is_active          boolean not null default true,
+  notes              text,
+  created_at         timestamptz not null default now()
+);
+
+create table purchase_orders (
+  id                 uuid primary key default gen_random_uuid(),
+  po_number          text unique not null,             -- PO-2026-0001
+  supplier_id        uuid not null references suppliers(id),
+  status             text not null default 'draft'
+                       check (status in ('draft','ordered','in_transit','received','cancelled')),
+  ordered_at         timestamptz,
+  received_at        timestamptz,
+  expected_at        date,
+  currency           char(3) not null default 'BWP',
+  exchange_rate      numeric(12,6) not null default 1,
+  subtotal_minor     bigint not null default 0,
+  freight_minor      bigint not null default 0,
+  duty_minor         bigint not null default 0,
+  total_minor        bigint not null default 0,
+  -- Snapshotted from the supplier at order time: terms change, history must not.
+  payment_terms_days integer not null default 0,
+  due_at             date,
+  paid_at            timestamptz,
+  created_by         uuid references users(id),
+  created_at         timestamptz not null default now()
+);
+create index on purchase_orders (supplier_id, status);
+create index on purchase_orders (due_at) where paid_at is null;
+
+create table purchase_order_lines (
+  id             uuid primary key default gen_random_uuid(),
+  purchase_order_id uuid not null references purchase_orders(id) on delete cascade,
+  variant_id     uuid references product_variants(id),
+  description    text,
+  quantity       integer not null check (quantity > 0),
+  unit_cost_minor bigint not null check (unit_cost_minor >= 0)
+);
+
+-- What we owe suppliers right now, and when. The mirror of seller payouts.
+create view supplier_payables as
+select
+  s.id                                    as supplier_id,
+  s.name,
+  s.payment_terms_days,
+  coalesce(sum(po.total_minor) filter (where po.paid_at is null), 0) as outstanding_minor,
+  min(po.due_at) filter (where po.paid_at is null)                    as next_due
+from suppliers s
+left join purchase_orders po on po.supplier_id = s.id and po.status in ('ordered','in_transit','received')
+group by s.id, s.name, s.payment_terms_days;
+
+-- ---------------------------------------------------------------------------
 -- THE LEDGER  (rule 3: append-only, double-entry, balances to zero)
 -- ---------------------------------------------------------------------------
 create table chart_of_accounts (
@@ -480,14 +559,31 @@ create table riders (
 );
 
 create table routes (
-  id         uuid primary key default gen_random_uuid(),
-  name       text not null,               -- 'Gaborone West 1'
-  city       text not null,
-  suburbs    text[] not null default '{}',
-  weekday    smallint check (weekday between 0 and 6),
-  is_active  boolean not null default true,
+  id              uuid primary key default gen_random_uuid(),
+  name            text not null,               -- 'Gaborone West 1'
+  city            text not null,
+  suburbs         text[] not null default '{}',
+  weekday         smallint check (weekday between 0 and 6),
+  -- Capacity is a hard number, not a feeling. Above this, first-attempt
+  -- success falls and the route runs past eleven hours.
+  daily_capacity  integer not null default 22 check (daily_capacity between 4 and 40),
+  serves_express  boolean not null default true,
+  is_active       boolean not null default true,
   unique (name, city)
 );
+
+-- The order-capture guard. When a route is full the storefront must offer the
+-- NEXT AVAILABLE DAY rather than accepting an order it cannot deliver. This
+-- function is what the checkout quote calls.
+create or replace function route_capacity_remaining(p_route uuid, p_date date)
+returns integer as $$
+  select r.daily_capacity - count(d.id)
+  from routes r
+  left join deliveries d on d.route_id = r.id and d.scheduled_date = p_date
+                          and d.status <> 'cancelled'
+  where r.id = p_route
+  group by r.daily_capacity;
+$$ language sql stable;
 
 create table delivery_failure_reasons (
   code     text primary key,              -- 'NO_ANSWER','WRONG_ADDRESS','REFUSED','NOT_HOME'
@@ -633,6 +729,55 @@ create table outbox_events (
   created_at   timestamptz not null default now()
 );
 create index on outbox_events (created_at) where published_at is null;
+
+-- ---------------------------------------------------------------------------
+-- CASH: the risk we carry in riders' pockets, and the cycle we are running
+-- ---------------------------------------------------------------------------
+-- Physical cash that is currently with a rider and not yet deposited.
+-- This is the only number in the company that can simply go missing.
+create view cod_cash_in_transit as
+select
+  r.id                                as rider_id,
+  u.full_name                         as rider_name,
+  coalesce(sum(d.cash_collected_minor), 0) as cash_held_minor,
+  r.cash_float_limit_minor,
+  max(d.delivered_at)                 as last_delivery_at
+from riders r
+join users u on u.id = r.user_id
+left join deliveries d
+  on d.rider_id = r.id
+ and d.status = 'delivered'
+ and d.cash_collected_minor > 0
+ and not exists (
+   select 1 from cash_reconciliations cr
+   where cr.rider_id = r.id and cr.business_date >= d.scheduled_date
+ )
+group by r.id, u.full_name, r.cash_float_limit_minor;
+
+-- The three components of the cash conversion cycle, computed from actuals.
+-- Positive = we fund growth ourselves. Negative = suppliers fund it.
+create view cash_cycle as
+with cogs as (
+  select coalesce(sum(oi.quantity * oi.unit_price_minor), 0) as cogs_90d
+  from order_items oi
+  join orders o on o.id = oi.order_id
+  where o.placed_at > now() - interval '90 days' and oi.status = 'active'
+),
+inv as (
+  select coalesce(sum(il.on_hand * pv.price_minor), 0) as inventory_minor
+  from inventory_levels il
+  join product_variants pv on pv.id = il.variant_id
+),
+dpo as (
+  select coalesce(avg(payment_terms_days), 0)::numeric as dpo_days
+  from purchase_orders where status in ('ordered','in_transit','received')
+)
+select
+  round(cogs.cogs_90d / 90.0, 0)                                              as daily_cogs_minor,
+  round(inv.inventory_minor / nullif(cogs.cogs_90d / 90.0, 0), 1)             as dio_days,
+  dpo.dpo_days                                                                 as dpo_days,
+  round(inv.inventory_minor / nullif(cogs.cogs_90d / 90.0, 0) - dpo.dpo_days, 1) as cash_cycle_days
+from cogs, inv, dpo;
 
 -- ---------------------------------------------------------------------------
 -- THE ONE QUERY THAT MATTERS
