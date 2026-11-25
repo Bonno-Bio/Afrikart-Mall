@@ -31,14 +31,32 @@ Demo accounts (password `demo1234`):
 ## Read in this order
 
 1. `docs/000-founding-decisions.md` — the business case, the four structural decisions, the 90-day pilot, the kill criteria
-2. `docs/001-platform-architecture.md` — what was built, the domain model, and the path to production
-3. `model/afrikart-unit-economics.xlsx` — the break-even model (21 orders/day in Gaborone)
+2. `docs/002-master-framework.md` — **the operating system**: constitution, strategy bets, metric tree, four quarterly fights, cadence, capital, people, risk
+3. `docs/001-platform-architecture.md` — what was built, the domain model, and the path to production
+4. `docs/registers/` — the living truth: decisions, assumptions, risks
+5. `model/afrikart-unit-economics.xlsx` — the break-even model (21 orders/day in Gaborone)
+
+Two kinds of document here, deliberately kept apart: the **framework** is stable and changes by
+version; the **registers** change weekly. If they disagree, the register is right and the framework
+needs a new version.
+
+## The five documents that run the company
+
+| Document | Answers | Changes |
+|---|---|---|
+| `docs/002-master-framework.md` | How we decide and operate | By version, rarely |
+| `docs/registers/decisions.md` | Why we chose this, and when we would reverse it | Weekly |
+| `docs/registers/assumptions.md` | What we believe, and the test that settles it | Weekly |
+| `docs/registers/risks.md` | What could kill us, and the trigger to watch | Monthly |
+| `docs/templates/` | The weekly and monthly rituals | Annually |
 
 ## Layout
 
 | Path | What it is |
 |---|---|
-| `docs/` | Decision memos, numbered. Read the highest number last. |
+| `docs/` | Decision memos and the master framework. Read the highest number last. |
+| `docs/registers/` | Living registers — decisions, assumptions, risks. |
+| `docs/templates/` | Meeting templates that the cadence runs on. |
 | `product/` | The application — React + Vite front end, Express API. |
 | `model/` | Financial models. `afrikart-unit-economics.xlsx` is the live one. |
 | `scripts/` | Generators, so models stay reproducible and reviewable in git. |
