@@ -1,8 +1,13 @@
-# Afrikart Mall — Master Execution Framework v1.0
+# Afrikart Mall — Master Execution Framework v1.1
 
 **Status:** The operating system. Every element here has an owner, an artifact, a cadence and a gate.
 **Companions:** `000-founding-decisions.md` (the business case) · `001-platform-architecture.md` (the build) ·
+`003-production-stack.md` · `004-build-readiness.md` · **`005-build-phases.md` (the execution spine)** ·
 `registers/` (the living truth) · `templates/` (the rituals)
+
+**v1.1 revision:** gate dates moved. A contracted professional build takes 13 weeks, so G1 lands in
+**month 5**, not month 3 — see `005-build-phases.md`. The four fights and their evidence are unchanged;
+only the calendar is honest now.
 
 ---
 
@@ -186,7 +191,7 @@ the review is not finished.
 
 One fight per quarter. Each has a gate. **A gate is passed on evidence, not on effort.**
 
-### Q1 — "One order makes money" (Months 1–3)
+### Q1 — "One order makes money" (Months 3.5–5)
 **Must-win:** a single Gaborone route where contribution per order is positive and delivery is
 reliable enough that we would recommend it to our own family.
 
@@ -199,10 +204,11 @@ reliable enough that we would recommend it to our own family.
 | Daily cash reconciliation to the Pula | Zero unexplained cash variances at month end |
 | Registered entity, tax, PSP, data-protection registration filed | Written confirmation from each counterparty |
 
-**Decision at G1:** continue to Q2, change the category, or stop. Stopping here costs ~P250k. Stopping
-at M12 costs ~P2m and a reputation.
+**Decision at G1:** continue to Q2, change the category, or stop. Stopping here costs ~P370k. Stopping
+at M12 costs ~P2m and a reputation. (`005` §5 reconciles this against the original P250k estimate -
+the difference is the contracted build.)
 
-### Q2 — "They come back" (Months 4–6)
+### Q2 — "They come back" (Months 5–7)
 **Must-win:** proof that we acquire a customer once and get paid again without paying to acquire them
 again.
 
@@ -217,7 +223,7 @@ again.
 **Decision at G2:** the repeat number is the verdict on the category. If 30-day repeat is below 15%
 with a consumable basket, the assortment is wrong, not the marketing.
 
-### Q3 — "Sellers carry half the growth" (Months 7–9)
+### Q3 — "Sellers carry half the growth" (Months 7–10)
 **Must-win:** the marketplace earns its name — third-party sellers add GMV without adding proportional
 cost or support load.
 
@@ -229,7 +235,7 @@ cost or support load.
 | Second route opened (densest adjacent suburb) | Route 2 contribution-positive by week 6 |
 | Pickup points live (8–10 partner shops) | Pickup = ≥ 20% of orders |
 
-### Q4 — "It works somewhere else" (Months 10–12)
+### Q4 — "It works somewhere else" (Months 10–13)
 **Must-win:** the model is a system, not a founder's habit.
 
 | Deliverables | Gate G4 evidence |
@@ -512,5 +518,12 @@ that does none of them. That is the whole strategy.
 
 ---
 
-*Version 1.0 — created as the operating framework for the first 12 months. Next scheduled revision:
-gate G1, with the assumption register and the first 45 days of real data in hand.*
+## Revision log
+
+| Version | Change | Why |
+|---|---|---|
+| 1.0 | Created as the operating framework for the first 12 months | — |
+| 1.1 | Gate dates shifted (G1 month 3 → month 5); linked to `005-build-phases.md`; capital at G1 restated to P370k | A contracted professional build takes 13 weeks. The framework and the build plan must not contradict each other. |
+
+*Next scheduled revision: gate G1, with the assumption register and the first 45 days of real data in
+hand.*
