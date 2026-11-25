@@ -37,10 +37,11 @@ Demo accounts (password `demo1234`):
 4. `docs/003-production-stack.md` — the production stack decision: WordPress vs React, and why the answer is neither
 5. `docs/004-build-readiness.md` — **what is still missing before the build starts**, and who owns it
 6. `docs/005-build-phases.md` — **the execution spine: all 14 phases**, gates, cash and dependencies
-7. `docs/spec/` — the build pack: 48-story backlog, the API contract, and **`delivery.md`** (the logistics spec)
-8. `docs/hiring/` — the build brief to send contractors, and the PSP question sheet
-9. `docs/registers/` — the living truth: decisions, assumptions, risks
-10. `model/afrikart-unit-economics.xlsx` — the break-even model (21 orders/day in Gaborone)
+7. `docs/006-amazon-gap-analysis.md` — **the twelve ways our own framework caps us**, and the amendments required
+8. `docs/spec/` — the build pack: 48-story backlog, the API contract, and **`delivery.md`** (the logistics spec)
+9. `docs/hiring/` — the build brief to send contractors, and the PSP question sheet
+10. `docs/registers/` — the living truth: decisions, assumptions, risks
+11. `model/afrikart-unit-economics.xlsx` — the break-even model (21 orders/day in Gaborone)
 
 `db/schema.sql` is the production data model — money in integer thebe, a double-entry append-only
 ledger that balances by constraint, inventory derived from movements, and a `route_weekly_pnl` view
