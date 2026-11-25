@@ -1,0 +1,24 @@
+{
+  "name": "afrikart-mall",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Afrikart Mall — Botswana commerce platform",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "start": "node server/index.js",
+    "serve": "npm run build && node server/index.js",
+    "seed": "node server/reset.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.26.2"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.1",
+    "vite": "^5.4.8"
+  }
+}
