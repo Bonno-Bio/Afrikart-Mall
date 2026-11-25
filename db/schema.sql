@@ -178,6 +178,24 @@ create table product_variants (
 );
 create unique index on product_variants (sku);
 
+-- Gallery images. primary_image_url on products is a denormalised convenience;
+-- this table is the truth, and the photography standard (docs/ops) says how many.
+create table product_media (
+  id           uuid primary key default gen_random_uuid(),
+  product_id   uuid not null references products(id) on delete cascade,
+  url          text not null,
+  alt_text     text,
+  position     smallint not null default 0,
+  width_px     integer,
+  height_px    integer,
+  -- A photo that fails the standard must not be publishable.
+  status       text not null default 'pending'
+                 check (status in ('pending','approved','rejected')),
+  reviewed_by  uuid references users(id),
+  created_at   timestamptz not null default now()
+);
+create index on product_media (product_id, position);
+
 -- ---------------------------------------------------------------------------
 -- INVENTORY: movements are the truth, on_hand is a cache
 -- ---------------------------------------------------------------------------
@@ -434,6 +452,17 @@ create table seller_payouts (
   created_at         timestamptz not null default now(),
   constraint payout_math check (net_minor = gross_minor - commission_minor - fulfilment_minor - refunds_minor),
   unique (seller_id, period_start, period_end)
+);
+
+-- Which order lines make up which payout. Without this the statement is a
+-- number we assert rather than a set of facts the seller can check.
+create table payout_items (
+  payout_id     uuid not null references seller_payouts(id) on delete cascade,
+  order_item_id uuid not null references order_items(id),
+  amount_minor  bigint not null,
+  primary key (payout_id, order_item_id),
+  -- An order line can only ever be paid once.
+  unique (order_item_id)
 );
 
 -- ---------------------------------------------------------------------------

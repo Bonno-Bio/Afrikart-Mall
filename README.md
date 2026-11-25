@@ -34,8 +34,11 @@ Demo accounts (password `demo1234`):
 2. `docs/002-master-framework.md` — **the operating system**: constitution, strategy bets, metric tree, four quarterly fights, cadence, capital, people, risk
 3. `docs/001-platform-architecture.md` — what was built, the domain model, and the path to production
 4. `docs/003-production-stack.md` — the production stack decision: WordPress vs React, and why the answer is neither
-5. `docs/registers/` — the living truth: decisions, assumptions, risks
-6. `model/afrikart-unit-economics.xlsx` — the break-even model (21 orders/day in Gaborone)
+5. `docs/004-build-readiness.md` — **what is still missing before the build starts**, and who owns it
+6. `docs/spec/` — the build pack: 48-story backlog with acceptance criteria, and the API contract
+7. `docs/hiring/` — the build brief to send contractors, and the PSP question sheet
+8. `docs/registers/` — the living truth: decisions, assumptions, risks
+9. `model/afrikart-unit-economics.xlsx` — the break-even model (21 orders/day in Gaborone)
 
 `db/schema.sql` is the production data model — money in integer thebe, a double-entry append-only
 ledger that balances by constraint, inventory derived from movements, and a `route_weekly_pnl` view
@@ -64,6 +67,8 @@ needs a new version.
 | `docs/templates/` | Meeting templates that the cadence runs on. |
 | `product/` | The application — React + Vite front end, Express API. |
 | `db/` | Production database schema. Stack-independent — correct for any framework. |
+| `docs/spec/` | Backlog and API contract — what a builder needs on day one. |
+| `docs/hiring/` | Build brief and payment-provider question sheet. |
 | `model/` | Financial models. `afrikart-unit-economics.xlsx` is the live one. |
 | `scripts/` | Generators, so models stay reproducible and reviewable in git. |
 
