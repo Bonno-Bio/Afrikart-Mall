@@ -367,11 +367,15 @@ export async function publishProduct(db, { productId, actorId = null } = {}) {
 }
 
 /**
- * The shelf as the operator sees it: price, real cost, real margin, stock.
+ * The shelf as the operator sees it: price, real cost, real stock.
  *
- * `marginFlattered` is the honest flag. It is true when a live variant has no
- * landed cost, which means the margin percentage in that row is a ceiling, not a
- * fact.
+ * The gap between shelf price and landed cost is the product's spread. For
+ * consignment stock that spread belongs to the SELLER, not to us — our revenue
+ * is commission and fulfilment. Calling it "margin" would be the exact
+ * confusion this phase exists to end, so it is named `sellerSpread`.
+ *
+ * `costUnknown` is the honest flag: true when a live variant has no landed cost,
+ * which makes its spread a guess rather than a fact.
  */
 export async function shelfReport(db) {
   const [productsRes, costs] = await Promise.all([
@@ -393,7 +397,7 @@ export async function shelfReport(db) {
   const rows = productsRes.rows.map((row) => {
     const price = Number(row.price_minor);
     const cost = costs.get(row.variant_id)?.unitCostMinor ?? null;
-    const marginMinor = cost === null ? null : price - cost;
+    const sellerSpreadMinor = cost === null ? null : price - cost;
     return {
       productId: row.product_id,
       title: row.title,
@@ -404,13 +408,14 @@ export async function shelfReport(db) {
       sku: row.sku,
       priceMinor: price,
       landedUnitCostMinor: cost,
-      marginMinor,
-      marginBps: marginMinor === null || price === 0 ? null : Math.round((marginMinor / price) * 10000),
+      sellerSpreadMinor,
+      sellerSpreadBps:
+        sellerSpreadMinor === null || price === 0 ? null : Math.round((sellerSpreadMinor / price) * 10000),
       onHand: Number(row.on_hand),
       reserved: Number(row.reserved),
       available: Number(row.on_hand) - Number(row.reserved),
       binCode: row.bin_code,
-      marginFlattered: cost === null,
+      costUnknown: cost === null,
     };
   });
 
@@ -420,7 +425,12 @@ export async function shelfReport(db) {
     summary: {
       skus: rows.length,
       liveSkus: live.length,
-      uncostedSkus: rows.filter((r) => r.marginFlattered).map((r) => r.sku),
+      uncostedSkus: rows.filter((r) => r.costUnknown).map((r) => r.sku),
+      // A seller losing money on every unit is a supplier who leaves in week
+      // three. This is the list that has to be empty before a soft launch.
+      sellersUnderwater: rows
+        .filter((r) => r.status === 'live' && r.sellerSpreadMinor !== null && r.sellerSpreadMinor < 0)
+        .map((r) => r.sku),
       // Our balance sheet only carries what we own. Consignment is counted, not
       // capitalised, and is reported separately so the difference stays visible.
       inventoryValueMinor: rows

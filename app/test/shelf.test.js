@@ -235,8 +235,8 @@ test('the shelf report counts consignment stock without pretending we own it', a
   for (const row of shelf.rows) {
     assert.ok(row.landedUnitCostMinor > 0, `${row.sku} should have a cost basis`);
     assert.equal(row.ownership, 'seller', 'the pilot holds seller stock');
-    assert.equal(row.marginFlattered, false);
-    assert.ok(row.marginMinor > 0);
+    assert.equal(row.costUnknown, false);
+    assert.ok(row.sellerSpreadMinor !== null);
     assert.ok(row.available === row.onHand - row.reserved);
   }
   assert.equal(shelf.summary.uncostedSkus.length, 0);

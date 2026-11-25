@@ -99,3 +99,33 @@ Next, in order:
 3. **Bulk import** — ten SKUs via seed is a demo; 40 SKUs via API is a chore that will produce typos at 11pm.
 4. **Stocktake** — the count that keeps `on_hand` from drifting into fiction.
 5. **Packaging cost** on fulfilment, so the P19.89 is not quietly all margin.
+
+---
+
+## 7. The pricing finding (found after the sheet was updated)
+
+Putting the real landed costs into the unit-economics sheet produced a number nobody wanted:
+
+| SKU | Shelf price | Seller net after 18% | Landed cost | Seller result |
+|---|---|---|---|---|
+| NAN-OP3-400 | P189.00 | P135.95 | P144.27 | **−P8.32** |
+| PAM-BDP-M46 | P215.00 | P154.65 | P170.03 | **−P15.38** |
+| NIV-BGL-200 | P98.00 | P70.49 | P72.14 | **−P1.65** |
+
+All three pilot SKUs lose the seller money. A Gaborone FMCG margin will not carry an 18% platform take on these categories, and the honest conclusion is not "the numbers are wrong" but one of three real choices:
+
+1. **Raise the shelf price** — formula from P189 to about P220 (+17%) to leave the seller a 10% margin.
+2. **Cut the take** — commission per category, not one rate for everything. Baby staples are price-sensitive and thin; cosmetics carry more.
+3. **Change the opening SKUs** — start with categories where an 18% take leaves everyone alive.
+
+This is exactly the kind of thing B2 was built to find, and it must be decided before B6 (soft launch, 13 January), not during it. It is now a decision on the sheet, in `Unit economics!A8`, and it is the first item the weekly review should read.
+
+**A related correction in the code:** `shelfReport` originally called `price − landed cost` a "margin". For consignment stock that spread belongs to the seller, not to us. The field is now `sellerSpreadMinor`, and the report carries a `sellersUnderwater` list — SKUs where the seller would lose money on every unit sold. That list has to be empty before a soft launch; a supplier who loses money leaves in week three.
+
+## 8. Revised next actions
+
+1. **Decide the commission structure per category** (this replaces "seller payouts" as the first item, because payouts to sellers who are underwater is a faster way to lose them).
+2. Seller payouts (AFR-42).
+3. Authentication (AFR-41).
+4. Bulk import, then stocktake.
+5. Packaging cost on fulfilment.
