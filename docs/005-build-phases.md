@@ -55,7 +55,7 @@ nothing else in the platform matters if it does not work.
 | Order | Build | Weeks | Why it is in this position | Cash |
 |---|---|---|---|---|
 | **S0** | **Sprint Zero** — no code | 0 | Entity, PSP quotes, suppliers, licences, demand test. Everything here has a lead time longer than a sprint. | P22k |
-| **B1** | **The Till** — money | 1–2 | Critical path, highest risk. Card + two mobile money, idempotent webhooks, atomic order transaction, double-entry ledger, VAT invoice, refunds. | P30k |
+| **B1** | **The Till** — money — **BUILT** | 1–2 | Critical path, highest risk. Card + two mobile money, idempotent webhooks, atomic order transaction, double-entry ledger, VAT invoice, refunds. | P30k |
 | **B2** | **The Shelf** — 40 SKUs, editorial storefront | 1–3 | Runs in parallel with B1 and is mostly *founder* work: photography, copy, bin locations. | P35k |
 | **B3** | **The Route** — fulfilment, rider, capacity | 3–4 | The moat. Route sheet, offline PWA, reason codes, POD, cash recon, three-way capacity, address grading. | P25k |
 | **B4** | **Trust** — the promises made visible | 5 | Refund channels, tracking page, published scorecard, DPA consent, T&Cs, licence gates. | P10k |
@@ -81,6 +81,14 @@ PSP ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~  (quotes day 2, underwriting in parallel)
 **What this buys.** Seven weeks and roughly P55,000 of build cost, and G1 arrives seven weeks earlier than
 v1.1 planned. What it costs is everything that is not needed to take one order and deliver it correctly —
 listed in §1.3, with the reason each one moved.
+
+**Build status.** B1 is built and tested: `app/` runs on real PostgreSQL 16 (PGlite locally, a
+real server in production), and `npm test` exercises 51 cases against the actual schema — atomic
+orders, idempotent replay, stock races, the deferred ledger-balance trigger, capture-then-deliver
+revenue recognition, both refund channels, and the capacity and address gates. The two schema
+forward references that only appear when the file is executed in order were found this way and
+fixed. What is *not* built is named in `app/README.md` §"What B1 does not do" — auth, payouts,
+COGS posting, PDF invoices.
 
 ### 1.1 The eight weeks, in detail
 

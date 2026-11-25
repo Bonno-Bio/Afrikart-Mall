@@ -80,7 +80,7 @@ create table addresses (
                        check (address_confidence in ('verified','pin_and_landmark','pin_only','landmark_only','unverified')),
   access_notes  text,                                  -- 'gate code 4417', 'behind the filling station'
   verified_at   timestamptz,
-  verified_by   uuid references riders(id),
+  verified_by   uuid,                     -- FK added after `riders` exists (see below)
   failed_attempts integer not null default 0,
   is_default    boolean not null default false,
   created_at    timestamptz not null default now()
@@ -288,9 +288,14 @@ create table inventory_levels (
 -- ---------------------------------------------------------------------------
 -- ORDERS
 -- ---------------------------------------------------------------------------
+-- Human-facing order numbers. A sequence, not a count(): two customers
+-- checking out in the same second must never receive the same number.
+create sequence order_number_seq start 26001;
+
 create table orders (
   id                  uuid primary key default gen_random_uuid(),
-  order_number        text unique not null,           -- AK-24001, human-facing
+  order_number        text unique not null            -- AK-26001, human-facing
+                        default ('AK-' || nextval('order_number_seq')::text),
   user_id             uuid not null references users(id),
   status              text not null default 'pending_payment'
                         check (status in ('pending_payment','placed','packed','dispatched',
@@ -668,6 +673,13 @@ create table riders (
   created_at         timestamptz not null default now()
 );
 
+-- `addresses` is defined before `riders`, so its verifier FK is attached here
+-- rather than inline. A forward reference inside CREATE TABLE would make the
+-- schema unloadable in file order — which is exactly how it should be tested.
+alter table addresses
+  add constraint addresses_verified_by_fk
+  foreign key (verified_by) references riders(id);
+
 create table routes (
   id              uuid primary key default gen_random_uuid(),
   name            text not null,               -- 'Gaborone West 1'
@@ -691,31 +703,6 @@ create table routes (
 -- The order-capture guard. When a route is full the storefront must offer the
 -- NEXT AVAILABLE DAY rather than accepting an order it cannot deliver. This
 -- function is what the checkout quote calls.
--- What is already promised to a route on a given day, in drops, grams and millilitres.
-create or replace view route_load as
-select
-  d.route_id,
-  d.scheduled_date,
-  count(*)                                                    as drops,
-  coalesce(sum(pv.weight_grams * ol.quantity), 0)             as weight_grams,
-  coalesce(sum(pv.volume_ml * ol.quantity), 0)                as volume_ml
-from deliveries d
-join orders o             on o.id = d.order_id
-join order_items ol       on ol.order_id = o.id and ol.status = 'active'
-join product_variants pv  on pv.id = ol.variant_id
-where d.status <> 'cancelled'
-group by d.route_id, d.scheduled_date;
-
-create or replace function route_capacity_remaining(p_route uuid, p_date date)
-returns integer as $$
-  select r.daily_capacity - count(d.id)
-  from routes r
-  left join deliveries d on d.route_id = r.id and d.scheduled_date = p_date
-                          and d.status <> 'cancelled'
-  where r.id = p_route
-  group by r.daily_capacity;
-$$ language sql stable;
-
 create table delivery_failure_reasons (
   code     text primary key,              -- 'NO_ANSWER','WRONG_ADDRESS','REFUSED','NOT_HOME'
   label    text not null,
@@ -760,6 +747,31 @@ create index on deliveries (order_id);
 create index on deliveries (rider_id, scheduled_date);
 create index on deliveries (status) where status in ('pending','assigned','out_for_delivery');
 create trigger deliveries_touch before update on deliveries for each row execute function set_updated_at();
+
+-- What is already promised to a route on a given day, in drops, grams and millilitres.
+create or replace view route_load as
+select
+  d.route_id,
+  d.scheduled_date,
+  count(*)                                                    as drops,
+  coalesce(sum(pv.weight_grams * ol.quantity), 0)             as weight_grams,
+  coalesce(sum(pv.volume_ml * ol.quantity), 0)                as volume_ml
+from deliveries d
+join orders o             on o.id = d.order_id
+join order_items ol       on ol.order_id = o.id and ol.status = 'active'
+join product_variants pv  on pv.id = ol.variant_id
+where d.status <> 'cancelled'
+group by d.route_id, d.scheduled_date;
+
+create or replace function route_capacity_remaining(p_route uuid, p_date date)
+returns integer as $$
+  select r.daily_capacity - count(d.id)
+  from routes r
+  left join deliveries d on d.route_id = r.id and d.scheduled_date = p_date
+                          and d.status <> 'cancelled'
+  where r.id = p_route
+  group by r.daily_capacity;
+$$ language sql stable;
 
 -- Rider float reconciliation, daily. Rule: any variance is investigated the
 -- same day, and a variance over the limit suspends the rider until resolved.

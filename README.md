@@ -44,6 +44,18 @@ Demo accounts (password `demo1234`):
 11. `docs/registers/` — the living truth: decisions, assumptions, risks
 12. `model/afrikart-unit-economics.xlsx` — the **v2** model: density curve, 12-month ramp, cash cycle, and what an engineer costs
 
+## Two applications, on purpose
+
+| | `app/` | `product/` |
+|---|---|---|
+| What it is | **The real platform.** API + database + money core | The clickable prototype: React, mock data, no real money |
+| Runs on | PostgreSQL 16 (or PGlite, the same engine in WebAssembly, for dev and tests) | Express + a JSON file |
+| Proves | The order is atomic, the ledger balances, the promise is honest | What the screens feel like |
+| Start here | `app/README.md` | `product/` — demo accounts in the section above |
+
+`app/` is where the build lives. `product/` stays because it is the fastest way to show somebody
+what the thing is before they read a single document.
+
 `db/schema.sql` is the production data model — money in integer thebe, a double-entry append-only
 ledger that balances by constraint, inventory derived from movements, and a `route_weekly_pnl` view
 that answers whether the business actually works.

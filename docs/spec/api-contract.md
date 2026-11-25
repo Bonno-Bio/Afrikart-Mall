@@ -257,6 +257,22 @@ Phone numbers are visible to the assigned rider **for that day only**, and the a
 
 ---
 
+## Implemented: what the build actually does
+
+`app/` implements the money half of this contract. Where reality and this document differ, this is
+the list, and the document should be updated rather than the code quietly diverging:
+
+| Contract says | `app/` does | Why |
+|---|---|---|
+| `POST /checkout/quote` returns `delivery_options` | `deliveryOptions`, plus `warnings[]` and `expressAvailable` | The Express promise now depends on address confidence and route capacity (`007` H1, H2), so the client needs to know *why* an option is missing |
+| `POST /orders` returns order | adds `replayed: true` on an idempotent replay, and `paymentId` | The client must be able to tell a replay from a new order |
+| PSP webhook body | `{ event, data: { paymentId, providerRef, providerFeeMinor } }`, HMAC-SHA256 in `x-psp-signature` | Signature verification is mandatory; unsigned calls are rejected when a secret is configured |
+| Staff actions | under `/api/ops/...` (deliver, refund, complete refund, ledger) | Separating the staff surface from the customer surface now avoids a role leak later |
+| `GET /admin/...` | not built | Admin is post-G1 (`005` §1.2) |
+
+Endpoints not in this document but implemented: `GET /api/health`, `GET /api/ops/ledger`
+(trial balance with the balance invariant checked), `GET /api/orders/{number}/invoice`.
+
 ## The three rules a reviewer enforces
 
 1. **Money is never computed on the client.** The client sends variant ids and quantities; the server

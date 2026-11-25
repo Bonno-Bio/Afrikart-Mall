@@ -3,6 +3,12 @@
 **Companion to:** `docs/000-founding-decisions.md`
 **Status:** Working vertical slice. Every screen reads and writes real data.
 
+> **Since this document was written, the real platform started.** `product/` is the prototype —
+> React, a JSON file, no real money. `app/` is B1, The Till: PostgreSQL, a double-entry ledger, an
+> atomic order transaction, idempotent webhooks, VAT invoices and two refund channels, with 51
+> tests. See `app/README.md` and `005` §1. Where this document describes the prototype, read it as
+> the *shape* of the product, not the state of the build.
+
 ---
 
 ## 1. What was built
