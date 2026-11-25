@@ -50,6 +50,7 @@ function buildSeed() {
   mk('u5', 'Refilwe Phiri', 'refilwe@example.com', 'customer', {})
   mk('u6', 'Lesego Banda', 'lesego@example.com', 'customer', {})
   mk('u7', 'Mpho Tshosa', 'mpho@example.com', 'customer', {})
+  mk('u8', 'Sipho Dube', 'rider@afrikart.co.bw', 'rider', { riderId: 'r1' })
 
   // ---- reviews: each product gets 3-8 reviews, weighted so the star
   // distribution is realistic rather than all five stars.
@@ -191,6 +192,70 @@ function buildSeed() {
   }
   orders.sort((a, b) => b.placedAt - a.placedAt)
 
+  // ---------------------------------------------------------------- delivery
+  // The delivery side is a first-class part of the model, not an afterthought:
+  // routes, riders, reason codes and cash reconciliation all exist here so the
+  // whole loop can be walked end to end.
+  const riders = [
+    { id: 'r1', userId: 'u8', name: 'Sipho Dube', vehicle: 'scooter', plate: 'B 421 AJC', cashFloatLimitMinor: 300000, isActive: true },
+    { id: 'r2', userId: null, name: 'Katlego Ntsima', vehicle: 'scooter', plate: 'B 118 BKD', cashFloatLimitMinor: 300000, isActive: true },
+  ]
+
+  const routes = [
+    { id: 'rt1', name: 'Gaborone West 1', city: 'Gaborone', suburbs: ['Extension 12', 'Broadhurst', 'Area 51', 'Extension 4'], weekday: 1, isActive: true },
+    { id: 'rt2', name: 'Tlokweng / Mogoditshane', city: 'Gaborone', suburbs: ['Tlokweng', 'Mogoditshane'], weekday: 3, isActive: true },
+  ]
+
+  const deliveryFailureReasons = [
+    { code: 'NO_ANSWER', label: 'Customer did not answer', category: 'customer' },
+    { code: 'NOT_HOME', label: 'Nobody at the address', category: 'customer' },
+    { code: 'WRONG_ADDRESS', label: 'Address could not be found', category: 'address' },
+    { code: 'NO_LANDMARK', label: 'No landmark or gate number', category: 'address' },
+    { code: 'REFUSED', label: 'Customer refused the item', category: 'customer' },
+    { code: 'NO_CASH', label: 'Customer could not pay on delivery', category: 'cash' },
+    { code: 'DAMAGED', label: 'Item damaged in transit', category: 'damage' },
+    { code: 'WRONG_ITEM', label: 'Wrong item packed', category: 'operational' },
+    { code: 'WEATHER', label: 'Weather blocked the route', category: 'operational' },
+  ]
+
+  const today = new Date(now).toISOString().slice(0, 10)
+  const deliveries = []
+  let did = 0
+  // everything packed or dispatched goes on today's route
+  const onRoute = orders.filter((o) => ['packed', 'dispatched'].includes(o.status)).slice(0, 9)
+  for (const o of onRoute) {
+    const cash = /Cash/i.test(o.paymentMethod) ? o.total : 0
+    deliveries.push({
+      id: `d${++did}`,
+      orderId: o.id,
+      routeId: 'rt1',
+      riderId: 'r1',
+      sequence: did,
+      status: o.status === 'dispatched' ? 'out_for_delivery' : 'assigned',
+      attemptCount: 0,
+      scheduledDate: today,
+      firstAttemptAt: o.status === 'dispatched' ? now - 3600000 : null,
+      deliveredAt: null,
+      failureReasonCode: null,
+      failureNote: null,
+      proofPhotoUrl: null,
+      cashDueMinor: cash * 100,
+      cashCollectedMinor: 0,
+      createdAt: now,
+    })
+  }
+  // a few already completed today, so the route has a history and cash in hand
+  for (const o of orders.filter((x) => x.status === 'delivered').slice(0, 3)) {
+    const cash = /Cash/i.test(o.paymentMethod) ? o.total : 0
+    deliveries.push({
+      id: `d${++did}`, orderId: o.id, routeId: 'rt1', riderId: 'r1', sequence: did,
+      status: 'delivered', attemptCount: 1, scheduledDate: today,
+      firstAttemptAt: now - 5 * 3600000, deliveredAt: now - 4.2 * 3600000,
+      failureReasonCode: null, failureNote: null, proofPhotoUrl: 'proof.jpg',
+      cashDueMinor: cash * 100, cashCollectedMinor: cash * 100, createdAt: now,
+    })
+  }
+
   return {
     categories,
     sellers,
@@ -198,6 +263,11 @@ function buildSeed() {
     reviews,
     users,
     orders,
+    riders,
+    routes,
+    deliveryFailureReasons,
+    deliveries,
+    cashReconciliations: [],
     sessions: {},
     counters: { order: 24000 + oid, review: rid },
   }

@@ -26,6 +26,7 @@ Demo accounts (password `demo1234`):
 
 - `customer@afrikart.co.bw` — shopper with order history
 - `seller@afrikart.co.bw` — Seller Central for Naledi Beauty Supply
+- `rider@afrikart.co.bw` — today's delivery route: stops, POD, failure reason codes, cash reconciliation
 - `admin@afrikart.co.bw` — platform operations
 
 ## Read in this order
@@ -36,7 +37,7 @@ Demo accounts (password `demo1234`):
 4. `docs/003-production-stack.md` — the production stack decision: WordPress vs React, and why the answer is neither
 5. `docs/004-build-readiness.md` — **what is still missing before the build starts**, and who owns it
 6. `docs/005-build-phases.md` — **the execution spine: all 14 phases**, gates, cash and dependencies
-7. `docs/spec/` — the build pack: 48-story backlog with acceptance criteria, and the API contract
+7. `docs/spec/` — the build pack: 48-story backlog, the API contract, and **`delivery.md`** (the logistics spec)
 8. `docs/hiring/` — the build brief to send contractors, and the PSP question sheet
 9. `docs/registers/` — the living truth: decisions, assumptions, risks
 10. `model/afrikart-unit-economics.xlsx` — the break-even model (21 orders/day in Gaborone)
@@ -68,7 +69,7 @@ needs a new version.
 | `docs/templates/` | Meeting templates that the cadence runs on. |
 | `product/` | The application — React + Vite front end, Express API. |
 | `db/` | Production database schema. Stack-independent — correct for any framework. |
-| `docs/spec/` | Backlog and API contract — what a builder needs on day one. |
+| `docs/spec/` | Backlog, API contract, and the delivery specification — what a builder needs on day one. |
 | `docs/hiring/` | Build brief and payment-provider question sheet. |
 | `model/` | Financial models. `afrikart-unit-economics.xlsx` is the live one. |
 | `scripts/` | Generators, so models stay reproducible and reviewable in git. |

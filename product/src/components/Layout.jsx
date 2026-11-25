@@ -140,6 +140,12 @@ export default function Layout({ children }) {
               <span className="haction-label">Returns</span>
               <span className="haction-value">&amp; Orders</span>
             </Link>
+            {user?.role === 'rider' && (
+              <Link to="/rider" className="haction">
+                <span className="haction-label">Today's</span>
+                <span className="haction-value"><Icon name="truck" size={16} /> Route</span>
+              </Link>
+            )}
             <Link to="/cart" className="haction" style={{ position: 'relative' }} aria-label={`Cart, ${cartCount} items`}>
               <span className="cart-count">{cartCount}</span>
               <span className="haction-label">Your</span>

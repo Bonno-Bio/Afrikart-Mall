@@ -10,6 +10,7 @@ import Account from './pages/Account'
 import OrderDetail from './pages/OrderDetail'
 import Seller from './pages/Seller'
 import Admin from './pages/Admin'
+import Rider from './pages/Rider'
 import Help from './pages/Help'
 import Saved from './pages/Saved'
 import NotFound from './pages/NotFound'
@@ -30,6 +31,7 @@ export default function App() {
         <Route path="/saved" element={<Saved />} />
         <Route path="/seller" element={<Seller />} />
         <Route path="/admin" element={<Admin />} />
+        <Route path="/rider" element={<Rider />} />
         <Route path="/help" element={<Help />} />
         <Route path="*" element={<NotFound />} />
       </Routes>

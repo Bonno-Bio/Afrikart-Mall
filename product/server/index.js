@@ -38,6 +38,7 @@ function requireRole(role) {
     if (!req.user) return res.status(401).json({ error: 'Please sign in.' })
     if (role === 'seller' && !['seller', 'admin'].includes(req.user.role)) return res.status(403).json({ error: 'Seller account required.' })
     if (role === 'admin' && req.user.role !== 'admin') return res.status(403).json({ error: 'Admin access required.' })
+    if (role === 'rider' && !['rider', 'admin'].includes(req.user.role)) return res.status(403).json({ error: 'Rider access required.' })
     next()
   }
 }
@@ -152,7 +153,7 @@ app.post('/api/account/addresses', requireUser, (req, res) => {
 
 // ---------------------------------------------------------------- browse
 app.get('/api/meta', (req, res) => {
-  res.json({ categories: db.categories, payments: PAYMENTS })
+  res.json({ categories: db.categories, payments: PAYMENTS, deliveryFailureReasons: db.deliveryFailureReasons, deliveryOptions: deliveryOptions(0, 'Gaborone') })
 })
 
 app.get('/api/home', (req, res) => {
@@ -546,6 +547,133 @@ app.post('/api/seller/orders/:id/fulfil', requireRole('seller'), (req, res) => {
   o.timeline.push({ at: Date.now(), label: 'Dispatched by seller', detail: 'Handed to Afrikart rider' })
   persist()
   res.json({ order: o })
+})
+
+
+// ---------------------------------------------------------------- rider
+function riderFor(user) {
+  return db.riders.find((r) => r.userId === user.id) || db.riders[0]
+}
+
+function stopView(d) {
+  const o = db.orders.find((x) => x.id === d.orderId)
+  const route = db.routes.find((r) => r.id === d.routeId)
+  const cash = d.cashDueMinor != null ? d.cashDueMinor : (/Cash/i.test(o?.paymentMethod || '') ? (o?.total || 0) * 100 : 0)
+  return {
+    deliveryId: d.id,
+    sequence: d.sequence,
+    status: d.status,
+    orderNumber: o?.id,
+    customerName: o?.address?.name || 'Customer',
+    line1: o?.address?.line1 || '',
+    city: o?.address?.city || '',
+    phone: o?.address?.phone || '',
+    items: o?.items?.length || 0,
+    itemPreview: o?.items?.[0]?.title || '',
+    cashDue: cash / 100,
+    cashCollected: (d.cashCollectedMinor || 0) / 100,
+    reasonCode: d.failureReasonCode,
+    routeName: route?.name || '',
+    deliveredAt: d.deliveredAt,
+  }
+}
+
+app.get('/api/rider/route', requireRole('rider'), (req, res) => {
+  const rider = riderFor(req.user)
+  const today = new Date().toISOString().slice(0, 10)
+  const mine = db.deliveries.filter((d) => d.riderId === rider.id)
+  const open = mine.filter((d) => !['delivered', 'failed', 'returned_to_hub'].includes(d.status))
+  const done = mine.filter((d) => d.status === 'delivered')
+
+  const cashDue = open.reduce((a, d) => a + (stopView(d).cashDue || 0), 0)
+  const cashCollected = done.reduce((a, d) => a + ((d.cashCollectedMinor || 0) / 100), 0)
+  const attempts = mine.length
+  const first = done.length
+
+  const recon = db.cashReconciliations.filter((r) => r.riderId === rider.id && r.businessDate === today).pop()
+
+  res.json({
+    rider: { id: rider.id, name: rider.name, vehicle: rider.vehicle, plate: rider.plate, floatLimit: rider.cashFloatLimitMinor / 100 },
+    route: db.routes.find((r) => r.id === 'rt1'),
+    date: today,
+    stops: [...open, ...done].sort((a, b) => a.sequence - b.sequence).map(stopView),
+    reasons: db.deliveryFailureReasons,
+    summary: {
+      total: attempts,
+      delivered: first,
+      remaining: open.length,
+      cashDue,
+      cashCollected,
+      successPct: attempts ? Math.round((first / attempts) * 100) : 0,
+    },
+    reconciliation: recon || null,
+  })
+})
+
+app.post('/api/rider/deliveries/:id/attempt', requireRole('rider'), (req, res) => {
+  const d = db.deliveries.find((x) => x.id === req.params.id)
+  if (!d) return res.status(404).json({ error: 'Delivery not found' })
+  const { outcome, reasonCode, note, cashCollected } = req.body || {}
+
+  if (outcome === 'failed' && !reasonCode) {
+    return res.status(400).json({ error: 'A failure reason is required. Nothing is logged without one.' })
+  }
+  if (outcome === 'failed' && !db.deliveryFailureReasons.some((r) => r.code === reasonCode)) {
+    return res.status(400).json({ error: 'Unknown reason code.' })
+  }
+
+  const o = db.orders.find((x) => x.id === d.orderId)
+  const nowTs = Date.now()
+  d.attemptCount = (d.attemptCount || 0) + 1
+  if (!d.firstAttemptAt) d.firstAttemptAt = nowTs
+
+  if (outcome === 'delivered') {
+    d.status = 'delivered'
+    d.deliveredAt = nowTs
+    d.proofPhotoUrl = 'proof.jpg'
+    d.cashCollectedMinor = Math.round((Number(cashCollected) || 0) * 100)
+    if (o) {
+      o.status = 'delivered'
+      o.timeline.push({ at: nowTs, label: 'Delivered', detail: 'Handed to the customer at the door (proof photo captured)' })
+    }
+    // seller payable becomes releasable only now — not on payment
+    persist()
+    return res.json({ ok: true, stop: stopView(d), note: 'Seller payable for these lines is now releasable.' })
+  }
+
+  d.status = 'failed'
+  d.failureReasonCode = reasonCode
+  d.failureNote = note || null
+  const label = db.deliveryFailureReasons.find((r) => r.code === reasonCode)?.label
+  if (o) {
+    o.status = 'packed'
+    o.timeline.push({ at: nowTs, label: 'Delivery failed', detail: `${label}${note ? ' — ' + note : ''}` })
+  }
+  persist()
+  return res.json({ ok: true, stop: stopView(d), note: `Logged as ${reasonCode}. The customer is told automatically.` })
+})
+
+app.post('/api/rider/reconcile', requireRole('rider'), (req, res) => {
+  const rider = riderFor(req.user)
+  const today = new Date().toISOString().slice(0, 10)
+  const counted = Number(req.body?.countedMinor != null ? req.body.countedMinor / 100 : req.body?.counted || 0)
+  const expected = db.deliveries
+    .filter((d) => d.riderId === rider.id && d.status === 'delivered')
+    .reduce((a, d) => a + ((d.cashCollectedMinor || 0) / 100), 0)
+  const variance = +(counted - expected).toFixed(2)
+  const record = {
+    id: 'cr' + Date.now(), riderId: rider.id, businessDate: today,
+    expected, counted, variance, at: Date.now(),
+  }
+  db.cashReconciliations.push(record)
+  persist()
+  res.json({
+    reconciliation: record,
+    blocked: Math.abs(variance) > rider.cashFloatLimitMinor / 100,
+    message: variance === 0
+      ? 'Balanced. Nothing outstanding.'
+      : `Variance of P${Math.abs(variance).toFixed(2)}. ${Math.abs(variance) > rider.cashFloatLimitMinor / 100 ? 'Above the float limit — tomorrow’s route is blocked until this is resolved.' : 'Investigate today.'}`,
+  })
 })
 
 // ---------------------------------------------------------------- admin

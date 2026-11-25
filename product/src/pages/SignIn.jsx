@@ -6,6 +6,7 @@ import { Icon } from '../components/icons'
 const DEMOS = [
   { role: 'Customer', email: 'customer@afrikart.co.bw', note: 'shops, tracks orders' },
   { role: 'Seller', email: 'seller@afrikart.co.bw', note: 'Naledi Beauty Supply' },
+  { role: 'Rider', email: 'rider@afrikart.co.bw', note: "today's delivery route" },
   { role: 'Admin', email: 'admin@afrikart.co.bw', note: 'platform operations' },
 ]
 
@@ -76,7 +77,7 @@ export default function SignIn() {
               {DEMOS.map((d) => (
                 <button key={d.email} className="demo-btn" onClick={() => quick(d)} disabled={busy}>
                   <span style={{ color: '#fff', fontWeight: 700 }}>
-                    <Icon name={d.role === 'Customer' ? 'user' : d.role === 'Seller' ? 'building' : 'settings'} size={13} />
+                    <Icon name={d.role === 'Customer' ? 'user' : d.role === 'Seller' ? 'building' : d.role === 'Rider' ? 'truck' : 'settings'} size={13} />
                     {' '}{d.role}
                   </span>
                   <span>{d.note}</span>
