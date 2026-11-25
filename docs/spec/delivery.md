@@ -139,6 +139,8 @@ Density is everything, and density is a design decision, not an outcome.
 | **Routes are named, not drawn by an algorithm** | `Gaborone West 1` is a human object a rider and a support agent can both reason about |
 | **Batching is by day, not by slot** | Predictable batching is what creates the P18 drop; slots destroy batching |
 | **Capacity is 18–22 drops per route per day** | Above that, first-attempt success falls and the route takes 11 hours |
+| **Capacity is three numbers, not one** | Drops, weight and volume. A route of formula nappies hits its physical limit at 9–11 drops on a scooter, long before it hits the drop limit |
+| **A parcel that does not fit is not a parcel** | Bulky lines get a bakkie day; small parcels share a scooter day. This is how a P18 drop survives a case of formula |
 | **A new route opens only when the existing one is above 85% capacity for two weeks** | Opening early splits density and doubles cost per drop |
 | **No route optimisation software until 6 routes** | Manual routing is correct at 2 routes; algorithms are a Phase 11 problem |
 
@@ -146,6 +148,45 @@ Density is everything, and density is a design decision, not an outcome.
 − PSP − returns. At 20 drops/day the route covers its rider, its fuel and a share of the warehouse. At
 8 drops/day it covers nothing. **The break-even is roughly 21 orders/day across the city** — which is
 why `model/afrikart-unit-economics.xlsx` and this document must always agree.
+
+### 5.1 The three capacities (`routes`)
+
+| Constraint | Column | Scooter | Car | Bakkie |
+|---|---|---|---|---|
+| Drops | `daily_capacity` | 22 | 22 | 26 |
+| Weight | `max_weight_grams` | 40,000 (40 kg) | 120,000 | 500,000 |
+| Volume | `max_volume_ml` | 80,000 (80 L) | 300,000 | 1,500,000 |
+
+`route_load` (view) sums promised drops, grams and millilitres per route per day from live orders.
+**The pack screen refuses to load a route past any of the three**, and the failure is a *scheduling*
+failure, not an exception: the order moves to the next route-day or to a larger vehicle. Products carry
+`weight_grams`, `volume_ml` and `parcel_class` (`small` / `bulky` / `fragile` / `cold`), and a product
+without both numbers cannot be listed as Express.
+
+Why this matters more than it looks: our wedge is infant formula and nappies, which are the two densest
+consumer products sold. **A drops-only capacity model would have us promise 22 deliveries and fail at 9**,
+then blame the rider.
+
+### 5.2 Addresses are graded, not assumed
+
+There is no residential postal system here (`007` H1). What we have is a plot number, a landmark and
+sometimes a pin. So address quality is a stored property, and it gates the promise:
+
+| `address_confidence` | What it means | Can promise Express? |
+|---|---|---|
+| `verified` | A rider has delivered here and corrected the record | Yes |
+| `pin_and_landmark` | Pin dropped by the customer **and** a landmark described | Yes |
+| `pin_only` | Pin only — pins are often dropped at the gate of the estate | Yes, with a call first |
+| `landmark_only` | "Behind the Total filling station" — routable but ambiguous | **No** — marketplace estimate, phone before dispatch |
+| `unverified` | Free text | **No** — call and grade before dispatch |
+
+Every failed drop with `NO_LANDMARK` or `WRONG_ADDRESS` writes back to the address record and to the
+**landmark dictionary** (`landmarks` table, per suburb, with aliases). That dictionary is a company asset
+in a way that a route-optimisation algorithm is not: it is the local knowledge that makes a stranger able
+to deliver, and it is what lets us hire rider number four.
+
+**Target:** ≥70% of active addresses at `pin_and_landmark` or better by G1; failed drops attributable to
+address quality below 15% of all failures.
 
 ---
 
@@ -237,6 +278,9 @@ No jargon, no internal codes, and always exactly one next action.
 | Cost per drop | ≤ P24 | ≤ P22 | ≤ P18 | Ops |
 | Drops per route hour | 3.5 | 4.5 | 5.0 | Ops |
 | Drops per route per day | 14 | 18 | 22 | Ops |
+| **Route load utilisation (drops / weight / volume)** | ≤ 85% | ≤ 85% | ≤ 85% | Ops |
+| **Addresses at `pin_and_landmark` or better** | 50% | 60% | 70% | Ops |
+| **Failures caused by address quality** | < 25% | < 20% | < 15% | Ops |
 | Failure reason code coverage | 100% | 100% | 100% | Ops |
 | Cash variance per day | ≤ P20 | 0 | 0 | Finance |
 | Time from failed drop to customer message | < 15 min | < 5 min | < 5 min | Ops |
@@ -257,6 +301,9 @@ No jargon, no internal codes, and always exactly one next action.
 | Route sheets | ✅ | ✅ | ✅ **now clickable** | `M4-02` |
 | Cash reconciliation and float limits | ✅ | ✅ | ✅ **now live in the demo** | `M4-05` |
 | Customer tracking page | ✅ | ✅ | ✅ live | `M4-06` |
+| Address grading + landmark dictionary | ✅ | ✅ (`address_confidence`) | — | `M0-07` (new) |
+| Three-way route capacity (`route_load`) | ✅ | ✅ (`capacity_limited`) | — | `M4-07` (new) |
+| Vehicle class per route | ✅ | — | — | `M4-07` (new) |
 | Route weekly P&L | ✅ `route_weekly_pnl` | ✅ | — | `M6-03` |
 | Multilingual rider UI (Setswana) | — | — | — | Post-launch |
 

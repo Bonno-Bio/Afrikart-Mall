@@ -72,8 +72,35 @@ create table addresses (
   lat           numeric(9,6),
   lng           numeric(9,6),
   landmark      text,
+  suburb        text,
+  -- There is no postal addressing here. What we have instead is a plot number,
+  -- a landmark, and sometimes a pin. How much of that we actually trust is a
+  -- property of the address, and it decides whether it can be routed at all.
+  address_confidence text not null default 'unverified'
+                       check (address_confidence in ('verified','pin_and_landmark','pin_only','landmark_only','unverified')),
+  access_notes  text,                                  -- 'gate code 4417', 'behind the filling station'
+  verified_at   timestamptz,
+  verified_by   uuid references riders(id),
+  failed_attempts integer not null default 0,
   is_default    boolean not null default false,
   created_at    timestamptz not null default now()
+);
+create index on addresses (city, suburb);
+
+-- The landmark dictionary. Every failed delivery teaches the city something;
+-- this table is where it is kept instead of in a rider's head.
+create table landmarks (
+  id         uuid primary key default gen_random_uuid(),
+  city       text not null,
+  suburb     text,
+  name       text not null,                 -- 'Broadhurst Industrial Total filling station'
+  kind       text check (kind in ('filling_station','school','church','mall','clinic','roundabout','other')),
+  lat        numeric(9,6),
+  lng        numeric(9,6),
+  aliases    text[] not null default '{}',
+  is_verified boolean not null default false,
+  created_at timestamptz not null default now(),
+  unique (city, name)
 );
 create index on addresses (user_id);
 create unique index one_default_address on addresses (user_id) where is_default;
@@ -143,7 +170,14 @@ create table categories (
   name      text not null,
   parent_id uuid references categories(id),
   position  integer not null default 0,
-  is_active boolean not null default true
+  is_active boolean not null default true,
+  -- Some categories cannot be sold casually. Infant formula, cosmetics and
+  -- anything with a health claim carry registration and labelling duties, and
+  -- a restricted-ingredient screen is cheaper than a recall.
+  licence_required     boolean not null default false,
+  licence_authority    text,                        -- 'BOBS' | 'MRA' | 'BURS'
+  restricted_ingredients text[] not null default '{}',
+  note      text
 );
 
 create table products (
@@ -168,6 +202,10 @@ create table products (
   created_at   timestamptz not null default now(),
   updated_at   timestamptz not null default now(),
   constraint live_product_needs_image check (status <> 'live' or primary_image_url is not null),
+  -- Nothing in a regulated category goes live without its paperwork on file.
+  compliance_status text not null default 'unchecked'
+                      check (compliance_status in ('unchecked','verified','blocked')),
+  compliance_doc_url text,
   -- The badge is earned: an Express listing must have a photograph and a
   -- declared parcel weight, because Express pricing and route capacity depend on both.
   constraint express_needs_photo check (catalog_tier <> 'express' or primary_image_url is not null)
@@ -184,7 +222,12 @@ create table product_variants (
   option_values  jsonb not null default '{}'::jsonb,
   price_minor    bigint not null check (price_minor >= 0),
   list_price_minor bigint check (list_price_minor >= 0),
-  weight_grams   integer,
+  weight_grams   integer check (weight_grams > 0),
+  -- Bulk, not just weight, decides whether a parcel fits on a route.
+  -- A case of formula is 6 kg and 14 litres; 22 of them do not go on a scooter.
+  volume_ml      integer check (volume_ml > 0),
+  parcel_class   text not null default 'small'
+                   check (parcel_class in ('small','bulky','fragile','cold')),
   is_active      boolean not null default true,
   unique (product_id, sku)
 );
@@ -233,6 +276,10 @@ create table inventory_levels (
   on_hand         integer not null default 0 check (on_hand >= 0),
   reserved        integer not null default 0 check (reserved >= 0),
   reorder_point   integer not null default 12,
+  -- Without a bin location a pick takes four minutes and gets the wrong size.
+  -- With one, the pick list sorts the walk.
+  bin_code        text,                              -- 'B3-04'
+  pick_sequence   integer,
   updated_at      timestamptz not null default now(),
   -- Selling the same unit to two customers is worse than a stockout.
   constraint not_oversold check (on_hand >= reserved)
@@ -344,11 +391,74 @@ create table refunds (
   reason         text not null,
   status         text not null default 'pending'
                    check (status in ('pending','processing','completed','failed')),
+  -- A mobile-money reversal is manual and slow; a store credit is instant.
+  -- Offering both, and paying the difference, is cheaper than a bad review.
+  channel        text not null default 'original_method'
+                   check (channel in ('original_method','store_credit','bank_transfer')),
+  credited_minor  bigint not null default 0,        -- instant, always
+  sla_due_at     timestamptz,
   provider_ref   text,
   requested_by   uuid references users(id),
   completed_at   timestamptz,
   created_at     timestamptz not null default now()
 );
+
+-- ---------------------------------------------------------------------------
+-- SUBSCRIPTIONS — and why mobile money makes them a reminder, not a debit
+-- Orange Money and MyZaka are push payments: the customer authorises each
+-- one. There is no mandate to pull. A subscription here is a scheduled
+-- request, not an automatic charge, and the schema has to admit that.
+-- ---------------------------------------------------------------------------
+create table subscriptions (
+  id              uuid primary key default gen_random_uuid(),
+  user_id         uuid not null references users(id) on delete cascade,
+  address_id      uuid references addresses(id),
+  plan_name       text not null,
+  items           jsonb not null,                   -- [{variant_id, quantity}]
+  interval_days   integer not null default 30 check (interval_days between 7 and 90),
+  payment_mode    text not null default 'push_request'
+                    check (payment_mode in ('card_token','push_request')),
+  next_charge_at  date not null,
+  status          text not null default 'active'
+                    check (status in ('active','paused','cancelled','churned')),
+  discount_bps    integer not null default 500,
+  consecutive_paid integer not null default 0,
+  last_request_at timestamptz,
+  created_at      timestamptz not null default now()
+);
+create index on subscriptions (status, next_charge_at);
+
+create table subscription_charges (
+  id               uuid primary key default gen_random_uuid(),
+  subscription_id  uuid not null references subscriptions(id) on delete cascade,
+  period_start     date not null,
+  order_id         uuid references orders(id),
+  amount_minor     bigint not null default 0,
+  status           text not null default 'requested'
+                     check (status in ('requested','paid','skipped','failed','expired')),
+  requested_at     timestamptz not null default now(),
+  resolved_at      timestamptz,
+  unique (subscription_id, period_start)
+);
+
+-- ---------------------------------------------------------------------------
+-- ANALYTICS — eight events, not a data lake
+-- Amazon's flywheel turns on measurement. Ours needs to know five things:
+-- what was viewed, what was searched for and not found, what went in a cart,
+-- what was abandoned, and what was delivered. Anything else can wait.
+-- ---------------------------------------------------------------------------
+create table analytics_events (
+  id          bigserial primary key,
+  name        text not null check (name in (
+                'product_view','search','search_zero_results','add_to_cart',
+                'checkout_start','order_placed','order_delivered','order_failed')),
+  session_id  text,
+  user_id     uuid references users(id),
+  props       jsonb not null default '{}'::jsonb,
+  occurred_at timestamptz not null default now()
+);
+create index on analytics_events (name, occurred_at desc);
+create index on analytics_events (occurred_at desc);
 
 -- ---------------------------------------------------------------------------
 -- PROCUREMENT — where the cash cycle is won or lost
@@ -567,6 +677,12 @@ create table routes (
   -- Capacity is a hard number, not a feeling. Above this, first-attempt
   -- success falls and the route runs past eleven hours.
   daily_capacity  integer not null default 22 check (daily_capacity between 4 and 40),
+  -- Drops are only one constraint. The other two are how much it weighs and
+  -- how much it takes up, which is why a route has a vehicle class.
+  vehicle_class   text not null default 'scooter'
+                    check (vehicle_class in ('scooter','car','bakkie','van')),
+  max_weight_grams bigint not null default 40000,      -- ~40 kg on a scooter
+  max_volume_ml    bigint not null default 80000,      -- ~80 litres of panniers
   serves_express  boolean not null default true,
   is_active       boolean not null default true,
   unique (name, city)
@@ -575,6 +691,21 @@ create table routes (
 -- The order-capture guard. When a route is full the storefront must offer the
 -- NEXT AVAILABLE DAY rather than accepting an order it cannot deliver. This
 -- function is what the checkout quote calls.
+-- What is already promised to a route on a given day, in drops, grams and millilitres.
+create or replace view route_load as
+select
+  d.route_id,
+  d.scheduled_date,
+  count(*)                                                    as drops,
+  coalesce(sum(pv.weight_grams * ol.quantity), 0)             as weight_grams,
+  coalesce(sum(pv.volume_ml * ol.quantity), 0)                as volume_ml
+from deliveries d
+join orders o             on o.id = d.order_id
+join order_items ol       on ol.order_id = o.id and ol.status = 'active'
+join product_variants pv  on pv.id = ol.variant_id
+where d.status <> 'cancelled'
+group by d.route_id, d.scheduled_date;
+
 create or replace function route_capacity_remaining(p_route uuid, p_date date)
 returns integer as $$
   select r.daily_capacity - count(d.id)

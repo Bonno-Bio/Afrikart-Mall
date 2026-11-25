@@ -257,6 +257,40 @@ to sell — a good problem, priced differently.
 
 ---
 
+## D-010 · Route One: the launch scope is a shop with a route
+
+| | |
+|---|---|
+| **Status** | Decided |
+| **Date** | 2026-11 |
+| **Decided by** | Founders |
+| **Reversal date** | G1 (≈ month 4) |
+
+**Decision.** The first build takes **eight weeks and ≈P270,000**, and delivers exactly five things:
+a till that works (card + two mobile money, atomic order, double-entry ledger, VAT invoice, refunds), a
+shelf of 40 SKUs with photographs and bin locations, a route with offline rider tooling and three-way
+capacity, a tracking page and a published scorecard, and the legal furniture around them. **Seller
+Central, payouts, search, reviews, subscriptions, pickup points and B2B are built after G1**, funded by
+trading.
+
+**Rejected.**
+- *The 13-week full build at P325,000 (v1.0):* it built seller tooling before sellers, search before a
+  catalogue, and a reviews system before a customer. It also put G1 at month 5 with P390,000 spent and
+  no revenue.
+- *Build in the same order but faster:* the order was the problem, not the duration.
+
+**Why.** `007` found that the binding constraints are operational — addresses, vehicle capacity, supply
+lead time, licensed categories — not platform features. Every week spent on Seller Central is a week not
+spent learning whether anyone will pay P380 for a basket delivered tomorrow. The till is also the
+highest-risk code we will write and the PSP underwriting is the only true critical path; starting there
+means the risk surfaces in week 2 instead of week 9.
+
+**What would reverse it.** A seller signing a consignment agreement large enough to fund the marketplace
+build before G1 — in which case Seller Central jumps the queue, because it would then be revenue, not
+speculation.
+
+---
+
 ## Template for the next entry
 
 ```

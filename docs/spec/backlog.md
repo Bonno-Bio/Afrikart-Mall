@@ -1,6 +1,6 @@
 # Build Backlog v1.0
 
-**51 stories across 8 milestones** (6 + 7 + 6 + 9 + 6 + 6 + 5 + 6). Sized S (<1 day), M (1–3 days), L (3–5 days).
+**53 stories across 8 milestones** (7 + 7 + 6 + 9 + 7 + 6 + 5 + 6). Sized S (<1 day), M (1–3 days), L (3–5 days).
 Priorities: **M**ust (blocks launch), **S**hould (launch quality), **C**ould (drop if late).
 
 This is the contract between the founder and the builder. A story is done when its acceptance
@@ -56,6 +56,15 @@ criteria are ticked in staging — see `004-build-readiness.md` §6.
 **M0-06 · Image upload pipeline** · M · S
 - Upload to object storage, resize to 1600px and 400px derivatives, strip EXIF, serve via CDN.
 - AC: a 4MB phone photo becomes a 1600px webp under 250KB, and the original is not lost.
+
+**M0-07 · Address grading and the landmark dictionary** · M · M  *(new in v1.1 — `007` H1)*
+- Checkout captures plot number, landmark, suburb and (where permitted) a pin; the record carries
+  `address_confidence` and `access_notes`.
+- Landmark dictionary: free-text landmarks are matched against `landmarks` per suburb, with aliases.
+- A rider's `NO_LANDMARK` / `WRONG_ADDRESS` failure writes back to the address and offers a one-tap
+  "correct this address" prompt.
+- AC: an address at `landmark_only` cannot be quoted Express; a corrected address raises its confidence
+  and the change is attributed to the rider who made it.
 
 ---
 
@@ -193,6 +202,13 @@ criteria are ticked in staging — see `004-build-readiness.md` §6.
 **M4-06 · Customer tracking page** · M · S
 - Four-stage bar, timeline, proof photo, expected day, reschedule or refund action.
 - AC: page reflects a status change within 60 seconds without a manual refresh.
+
+**M4-07 · Three-way route capacity and vehicle load** · M · M  *(new in v1.1 — `007` H2)*
+- `route_load` sums drops, grams and millilitres per route per day; pack screen blocks a load past any
+  of the three limits; checkout offers the next available date instead of accepting an undeliverable order.
+- Vehicle class per route; bulky parcels route to a bakkie day, small parcels to a scooter day.
+- AC: adding a case of formula that breaches the volume limit moves the order rather than the limit, and
+  the customer sees `NEXT_DAY_OFFERED` in the quote.
 
 ---
 

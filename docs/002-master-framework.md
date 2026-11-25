@@ -1,9 +1,10 @@
-# Afrikart Mall — Master Execution Framework v1.2
+# Afrikart Mall — Master Execution Framework v1.3
 
 **Status:** The operating system. Every element here has an owner, an artifact, a cadence and a gate.
 **Companions:** `000-founding-decisions.md` (the business case) · `001-platform-architecture.md` (the build) ·
 `003-production-stack.md` · `004-build-readiness.md` · **`005-build-phases.md` (the execution spine)** ·
-**`006-amazon-gap-analysis.md` (the critique this version answers)** · `registers/` (the living truth) ·
+**`006-amazon-gap-analysis.md` (the framework critique)** · **`007-hinderings-last-run.md` (the
+operational critique — what stops us running the machine)** · `registers/` (the living truth) ·
 `templates/` (the rituals)
 
 **v1.1 revision:** gate dates moved. A contracted professional build takes 13 weeks, so G1 lands in
@@ -27,6 +28,22 @@ each traceable to a numbered amendment in `006` §5 (shown as `[A5]`). The ones 
 - AI is demoted from pillar to tool in every document. `[A12]`
 
 Where v1.1 asserted, v1.2 attaches a number, an owner and a date.
+
+**v1.3 revision — the sequencing revision, and nothing else.** `007` found twelve *operational* hinderings
+that no amount of framework fixes: no street addresses, a route limited by weight rather than drops,
+no supply chain behind the shelf, regulated wedge categories, mobile money that cannot be debited.
+The mechanism for each now exists in `db/schema.sql` (address confidence and a landmark dictionary,
+`route_load` and vehicle classes, category licences, refund channels, `subscriptions.payment_mode`,
+`analytics_events`). Because the scope of a launch shrank, `005` **v2.0** re-maps the build: **the till
+before the catalogue, the route before the marketplace, Seller Central behind the gate instead of in
+front of it**, eight weeks to a paying customer for ≈P270,000. Nothing in this framework changed except
+the calendar: **G1 lands ≈ month 4, not month 5**, and every month label in §4 shifts earlier by the same
+seven weeks. `005` owns dates; this document owns targets.
+
+One sentence changes too, and it is the one we say out loud: **"The reliable way to buy things in
+Botswana — ordered today, delivered tomorrow, taken back if it is wrong."** Amazon is the model of
+*mechanism*, not of *scale*. Saying otherwise prices a capital requirement we do not have and promises a
+service we cannot keep (`007` H12).
 
 ---
 
@@ -257,6 +274,11 @@ It is the denominator of three of the four above.
 
 One fight per quarter. Each has a gate. **A gate is passed on evidence, not on effort.**
 
+> **Calendar note (v1.3).** The month labels below assume the original 13-week build. `005` v2.0 trims the
+> launch scope to Route One and starts trading in week 8, so **every label here shifts about seven weeks
+> earlier** — Q1 covers months 2–3.5, G1 lands ≈ month 4, and G2 ≈ month 6. The targets, evidence and
+> decisions are unchanged; only the dates move. `005` owns the calendar.
+
 ### Q1 — "One order makes money" (Months 3.5–5)
 **Must-win:** a single Gaborone route where contribution per order is positive and delivery is
 reliable enough that we would recommend it to our own family.
@@ -353,14 +375,14 @@ artifact, it is a hobby.**
 | 1 | Vision & identity | CEO | `000` §1, brand sheet, tone of voice | Annual | — |
 | 2 | Market research | CEO | Assumption register + monthly customer interviews (5) | Monthly | Assumptions closed |
 | 3 | Business model | CEO | `000` §3, decision log | Quarterly | Contribution/order |
-| 4 | Product & category | Merchandising | Category plan: 60 Express SKUs + long-tail Marketplace, price bands, bundle map, tier rules | Monthly | AOV, attach rate, Express share |
+| 4 | Product & category | Merchandising | Category plan: 60 Express SKUs + long-tail Marketplace, price bands, bundle map, tier rules, **weight and volume per variant** (`007` H2) | Monthly | AOV, attach rate, Express share |
 | 5 | Seller ecosystem | Seller success | KYC checklist, onboarding kit, scorecard | Weekly | 3P share of GMV |
 | 6 | Customer experience | Support | WhatsApp playbook, SLA board, refund SOP | Daily | NPS, refund days |
 | 7 | Technology | Tech lead | `001`, gate roadmap, incident log | Sprint (2wk) | Uptime, order error rate |
 | 8 | Payments & procurement | Finance | PSP agreement, settlement ledger, reconciliation, **supplier terms register** `[A2]` | Daily | Cash cycle, prepaid % |
 | 9 | Logistics | Ops | Route sheet, reason codes, cost/drop model | Daily | 1st-attempt %, cost/drop |
 | 10 | Financial model | Finance | `model/afrikart-unit-economics.xlsx` | Monthly | Contribution/route |
-| 11 | Legal & compliance | CEO + counsel | Compliance calendar, contract register | Quarterly | Zero lapses |
+| 11 | Legal & compliance | CEO + counsel | Compliance calendar, contract register, **category licence matrix** (which categories need which authority's paper, `007` H4) | Quarterly | Zero lapses, zero unlicensed listings |
 | 12 | Marketing | Growth | Payday calendar, channel P&L, content library | Weekly | CAC, repeat 30d |
 | 13 | People | CEO | Org plan, role scorecards, 1:1s | Monthly | Regretted attrition |
 | 14 | Automation (AI is a tool, not a pillar) `[A12]` | Tech lead | Automation backlog, ordered by hours saved | Monthly | Manual touches/order |
@@ -682,6 +704,7 @@ that does none of them. That is the whole strategy.
 |---|---|---|
 | 1.0 | Created as the operating framework for the first 12 months | — |
 | 1.1 | Gate dates shifted (G1 month 3 → month 5); linked to `005-build-phases.md`; capital at G1 restated to P370k | A contracted professional build takes 13 weeks. The framework and the build plan must not contradict each other. |
+| 1.3 | Re-sequenced to `005` v2.0 (Route One: eight weeks, ≈P270k, G1 ≈ month 4); one-sentence promise adopted; §4 calendar shifts seven weeks earlier; `007` added as a companion | `007-hinderings-last-run.md`. Twelve operational hinderings, none fixable by strategy. The launch scope was the platform of a company we are not yet — so the build order changed and the dates moved with it. |
 | 1.2 | Density curve replaces the P18 constant (§3.1); cash cycle joins the G1 pack and the metric tree (§3.2, §7, Q1); prepaid ≥70% by G3; supplier terms become a dated objective; third-party fulfilment Q4 → Q3 (P12 → P10); engineer on payroll from M4 (§8); route capacity cap + next-available date + pickup overflow + pre-payday acquisition (§11); second north star with activation trigger (§3.2); Express/Marketplace tiers (§2.1); escape category named (§2.1); G1 outcomes renamed continue/re-scope/stop with re-scope default (Q1); incumbent question made a standing monthly item (§10.1, R-08); AI demoted from pillar to tool (§4.1, §5, §9). Model rebuilt as v2 (`Density`, `Ramp`, `Cash cycle` sheets). | `006-amazon-gap-analysis.md`. v1.1 was strong on survival and silent on growth; the twelve amendments in `006` §5 are the difference between a disciplined operator that stays small and one that compounds. |
 
 *Next scheduled revision: gate G1, with the assumption register and the first 45 days of real data in

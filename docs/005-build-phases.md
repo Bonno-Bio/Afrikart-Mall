@@ -1,21 +1,30 @@
-# Build Phases v1.1 — the execution spine
+# Build Phases v2.0 — the execution spine, remapped to start
 
-**One numbering, from today to regional expansion.** Fourteen phases. Each has an entry condition, a
-deliverable, an exit gate, a cash cost and a single metric that must move.
+**One plan, from this Monday to regional expansion.** §1 is the **Route One** sequence: eight weeks to a
+paying customer, ≈P270,000, on a deliberately reduced scope. §2 keeps the full phase catalogue as the
+detail library — the scope we build *after* the evidence, in the order the evidence justifies.
+
+**v2.0 (this version) is a re-map, not a rewrite.** `007-hinderings-last-run.md` found twelve things that
+would stop us operating like Amazon — no addresses, a route limited by weight not drops, no supply chain,
+regulated wedge categories, mobile money that cannot be debited. Every one is now in a named artefact,
+and the build order changed to match: **the till before the catalogue, the route before the marketplace,
+and Seller Central behind the gate instead of in front of it.** G1 therefore lands at **≈ month 4**, not
+month 5.
 
 **Two rules govern everything below:**
 
-1. **Phases are sequential.** A phase does not start because the calendar says so. It starts because
-   the previous gate passed, with evidence in `docs/registers/`.
-2. **One phase in flight at a time.** Maximum one parallel commercial track (the PSP, always the PSP).
-   Work-in-progress limit is one. That is the whole discipline.
+1. **A phase starts on an entry condition and ends on evidence.** Not on the calendar, and not on
+   enthusiasm. The exit evidence lives in `docs/registers/`, not in a status update.
+2. **One build track, one commercial track.** The builder never runs two phases at once; the founder's
+   track (suppliers, photography, licences, PSP) runs alongside the build because it waits on the world,
+   not on the code. Work-in-progress limit on code is one. That is the whole discipline.
 
-**A note on dates, honestly:** `002-master-framework.md` placed gate G1 at month 3. With a contracted
-professional build, the earliest credible G1 is **month 5**. One of those two statements had to give.
-The framework is now v1.2 and agrees with this document. A plan that disagrees with itself is worse
-than a late plan.
+**A note on dates, honestly:** `002-master-framework.md` first placed gate G1 at month 3. With the full
+13-week scope, the earliest credible G1 was month 5 — and v1.1 said so. Trimming the scope to Route One
+brings it back to **≈ month 4** (week 8 launch, 45-day pilot). **This document owns the calendar; `002`
+owns the targets.** Where the two name different months, this one is right.
 
-**v1.1 revision (this version).** `006-amazon-gap-analysis.md` found four things this spine got wrong
+**v1.1 revision (kept for the record).** `006-amazon-gap-analysis.md` found four things the spine got wrong
 and they are corrected here:
 
 - **Third-party fulfilment moves P12 → P10.** It is the only high-margin line available to us, and it
@@ -32,58 +41,142 @@ and they are corrected here:
 
 ---
 
-## 1. The master sequence
+## 1. The master sequence — Route One
 
-| Phase | Name | Build weeks | Calendar | Gate | Cash |
-|---|---|---|---|---|---|
-| **P0** | Readiness | −3 → 0 | Month 0 | — | P25k |
-| **P1** | Foundation | 1–2 | M1 | — | P27k |
-| **P2** | Catalogue | 2–3.5 | M1 | — | P27k |
-| **P3** | Storefront | 3.5–5 | M2 | — | P27k |
-| — | *PSP buffer* | 5–6 | M2 | — | — |
-| **P4** | **Money** | 6–8 | M2 | — | P54k |
-| **P5** | Fulfilment | 8–9.5 | M3 | — | P18k |
-| **P6** | Seller Central | 9.5–11 | M3 | — | P18k |
-| **P7** | Admin & Ops | 11–12 | M3 | — | P5k |
-| **P8** | Hardening & Launch | 12–13 | M3 | **Launch** | P4k |
-| **P9** | **Trading pilot** *(builds nothing)* | — | M3.5–5 | **G1** | P40k |
-| **P10** | Retention **+ third-party fulfilment** `[A4]` | — | M5–7 | **G2** | P70k |
-| **P11** | Marketplace scale | — | M7–10 | **G3** | P120k |
-| **P12** | Distribution & B2B at scale | — | M10–13 | **G4** | P180k |
-| **P13** | Regional | — | Year 2 | **G5** | — |
+**v2.0 remaps the order of the build, not the strategy.** v1.x built the platform of a company with
+sellers, subscriptions and a marketplace — then hoped to become that company. We are not that company on
+day one. **We are a shop with a route**, and the only thing that has to work in week eight is: *a customer
+pays, a rider delivers, the money reconciles, the customer comes back.*
+
+So the build starts with the till, not the catalogue. Money is the critical path (the PSP takes six weeks
+of underwriting and is the one thing we cannot compress), it is the highest-risk code we will write, and
+nothing else in the platform matters if it does not work.
+
+| Order | Build | Weeks | Why it is in this position | Cash |
+|---|---|---|---|---|
+| **S0** | **Sprint Zero** — no code | 0 | Entity, PSP quotes, suppliers, licences, demand test. Everything here has a lead time longer than a sprint. | P22k |
+| **B1** | **The Till** — money | 1–2 | Critical path, highest risk. Card + two mobile money, idempotent webhooks, atomic order transaction, double-entry ledger, VAT invoice, refunds. | P30k |
+| **B2** | **The Shelf** — 40 SKUs, editorial storefront | 1–3 | Runs in parallel with B1 and is mostly *founder* work: photography, copy, bin locations. | P35k |
+| **B3** | **The Route** — fulfilment, rider, capacity | 3–4 | The moat. Route sheet, offline PWA, reason codes, POD, cash recon, three-way capacity, address grading. | P25k |
+| **B4** | **Trust** — the promises made visible | 5 | Refund channels, tracking page, published scorecard, DPA consent, T&Cs, licence gates. | P10k |
+| **B5** | **Hardening** — the boring week | 6 | UAT, timed restore, monitoring, load test at 3× expected volume. The four never-cut items. | P8k |
+| **B6** | **Soft launch** — 20 orders/day cap, one route, waitlist | 7–8 | Real money, small blast radius. | P10k |
+| **B7** | **Pilot → G1** — 45 days, builds nothing | 8–15 | Evidence. **G1 now lands at ≈ month 4, not month 5.** | P40k |
+| — | *Everything else* | post-G1 | Seller Central, payouts, search, reviews, subscriptions, marketplace, B2B, city 2. Funded by trading, not capital. | — |
 
 ```
-Month   0    1    2    3    4    5    6    7    8    9   10   11   12
-        │    │    │    │    │    │    │    │    │    │    │    │    │
-P0  ████
-P1       ████
-P2        ████
-P3          ████
-PSP ~~~~~~~~~~~~~~~~~~~~~~~ (underwriting, started day 2)
-P4              ████████
-P5                    ████
-P6                      ████
-P7                        ███
-P8                          ███  ◀ LAUNCH
-P9                            ████████  ◀ G1
-P10                                 ████████  ◀ G2
-P11                                        ████████████  ◀ G3
-P12                                                  ████████████  ◀ G4
+Week  0    1    2    3    4    5    6    7    8 ──────── 15
+      │    │    │    │    │    │    │    │    │          │
+S0  ████
+B1       ████████  ◀ the till works end to end
+B2       █████████████
+B3                 ████████
+B4                           ████
+B5                               ████
+B6                                   ████  ◀ SOFT LAUNCH
+B7                                       ████████████████  ◀ G1
+PSP ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~  (quotes day 2, underwriting in parallel)
 ```
+
+**What this buys.** Seven weeks and roughly P55,000 of build cost, and G1 arrives seven weeks earlier than
+v1.1 planned. What it costs is everything that is not needed to take one order and deliver it correctly —
+listed in §1.3, with the reason each one moved.
+
+### 1.1 The eight weeks, in detail
+
+| Week | Build exits when… | Commercial track (parallel, never blocks) |
+|---|---|---|
+| **0** | Three PSP quotes in hand; builder contracted; 50 pilot addresses graded; 40 SKUs priced and photographed | CIPA filed, bank account opened, storage unit deposit paid, supplier run booked, licence check started |
+| **1** | PSP sandbox: a test card and a test mobile-money payment both create an order, a payment and two balanced ledger entries | PSP application submitted; opening inventory ordered |
+| **2** | Webhooks are idempotent (replayed ten times, one order); refunds create a reversal; VAT invoice renders a legal PDF | Insurance quoted; rider shortlisted |
+| **3** | 40 SKUs live with photographs, bin locations and correct prices; a stranger can find one in two clicks | Rider hired + relief rider identified; shelving built |
+| **4** | A delivery can be created, assigned, failed with a reason code, rescheduled and completed with proof; cash reconciles to the Pula | Stock received, counted, binned; price labels on shelves |
+| **5** | Address grading enforced at checkout; tracking page shows every state; scorecard page publishes | Scorecard month 1 drafted; legal pages reviewed |
+| **6** | Timed restore from backup; monitoring alarms fire; 90 test orders pass UAT; DPA consent captured at checkout | Launch list of 200 WhatsApp contacts assembled |
+| **7–8** | 20 real orders delivered, ≤2 failed, cash reconciled daily, zero unexplained variance | Demand test results folded into the bundle and price decisions |
+
+### 1.2 What is deliberately not in the launch
+
+Every line below is a real feature we will need. None of them is needed to take a correct order and
+deliver it. Each has a date, and the date is not "later".
+
+| Deferred | Was | Now | Why |
+|---|---|---|---|
+| **Seller Central** (onboarding, KYC workflow, seller dashboard, CSV import) | P6, pre-launch | **post-G1** | D-001 says self-service sellers come after delivery works. Building seller tooling before there are sellers is the most expensive kind of speculation. |
+| **Seller payouts + statements** | P6/P7 | **post-G1** | Launch stock is owned and consigned. One payout run per month, done by hand, is correct at 5 suppliers. |
+| **Search** (index, facets, suggestions, sorting) | P2/P3 | **post-G1** | 40 SKUs do not need a search engine; they need three editorial rails and a category page. Keyword `ILIKE` until 200 SKUs. |
+| **Reviews, saved items, wishlists, recommendations** | P3 | **post-G1** | No reviews exist on day one (H10). Publishing a scorecard is the honest substitute. |
+| **Subscriptions UI + billing** | P10 | **post-G1** | Mobile money cannot be debited (H5); a subscription at launch would be a reminder service with no orders. |
+| **Pickup points** | P11 | **post-G1** | Overflow valve; needed at 25 orders/day, not at 10. |
+| **B2B accounts, standing orders, price breaks** | P12 | **post-G1** | Needs a P&L to price against. |
+| **Multilingual, mobile app, loyalty, coupons engine** | various | **post-G1** | A PWA and one discount code (`LAUNCH10`) are enough. |
+| **Full admin console** | P7 | **trimmed** | Orders list, pack, refund, product CRUD. That is the console. |
+
+**What is never cut, at any scope** (`005` §6): idempotent webhooks · the atomic order transaction ·
+mandatory failure reason codes · the timed restore drill. And now a fifth: **the analytics events**
+(H8) — because instrumentation added later is instrumentation never added.
+
+### 1.3 Where the old phases went
+
+Nothing has been thrown away; the detail lives in §2 and the work moves to a date justified by evidence.
+
+| v1.0 phase | v2.0 destination |
+|---|---|
+| P0 Readiness | **S0 Sprint Zero** |
+| P1 Foundation | **B1** (same work, week 1) |
+| P2 Catalogue | **B2**, trimmed to 40 SKUs, manual entry |
+| P3 Storefront | **B2**, trimmed to home / category / product / cart / checkout |
+| P4 Money | **B1 — moved to the front of the queue** |
+| P5 Fulfilment | **B3**, plus three-way capacity and address grading |
+| P6 Seller Central | **Deferred to post-G1** |
+| P7 Admin & Ops | Split: order admin in B1–B2, the rest deferred |
+| P8 Hardening | **B4 + B5** |
+| P9 Trading pilot | **B7**, unchanged in intent, earlier in the calendar |
+| P10 Retention + 3P fulfilment | Post-G1 (G2) |
+| P11 Marketplace scale | Post-G1 (G3) |
+| P12 Distribution & B2B | Post-G1 (G4) |
+| P13 Regional | Year 2 (G5) |
 
 ### The three parallel tracks (always running)
 
 | Track | Runs for | Never blocks |
 |---|---|---|
-| **Commercial** — entity, bank, PSP, suppliers, insurance, advisors | P0 → ongoing | Nothing technical waits on it; it waits on nothing |
-| **Build** — the phases | P1 → P8, then by gate | The commercial track |
+| **Commercial** — entity, bank, PSP, suppliers, insurance, advisors | S0 → ongoing | Nothing technical waits on it; it waits on nothing |
+| **Build** — B1 → B5 | 6 weeks | The commercial track |
 | **Operating habits** — SOPs, registers, cadence | From day 1 | The build |
 
 The build must never be the reason the PSP is late. The PSP starts on day 2 regardless.
 
 ---
 
+## 1.4 The cash to get started
+
+| Line | Cash |
+|---|---|
+| Sprint Zero (entity, licences, insurance, legal, photography brief) | P22,000 |
+| Build contract — 7 weeks (card + mobile money + ledger + storefront + delivery + hardening) | P105,000 |
+| Photography, 40 SKUs | P8,000 |
+| Storage fit-out (shelving, bins, scanner, printer, scale) | P14,000 |
+| Rider setup (scooter deposit, insurance, phone) | P12,000 |
+| Opening inventory, 40 SKUs | P55,000 |
+| Launch marketing | P10,000 |
+| **Subtotal** | **P226,000** |
+| Contingency (20%) | P45,000 |
+| **To take the first order** | **≈ P271,000** |
+
+Then the thing v1.0 forgot: **≈P114,000 of operating loss absorbed before month 6** (`Ramp` sheet). So:
+
+> **≈ P270,000 to open the doors. ≈ P385,000 to a business that funds itself.**
+> v1.1 said P325,000 and P504,000 for the same two milestones. The difference is scope, not optimism:
+> about P55,000 of build moved behind revenue, where it can be paid for by customers.
+
+---
+
 ## 2. The phase catalogue
+
+> **How to read this section in v2.0.** These are the full phase definitions, kept because the scope has
+> not changed — only the *order*. Where a phase is deferred or trimmed at launch, the heading says so and
+> §1.2 gives the date. Anything marked **POST-G1** is built when there is evidence to build it against.
 
 ### P0 · Readiness — *before any code*
 **Weeks −3 → 0 · Cost ~P25,000 · Owner: founders**
@@ -222,8 +315,13 @@ failure be logged as "other".
 
 ---
 
-### P6 · Seller Central
-**Weeks 9.5–11 · 10% · Stories M5-01 → M5-06**
+### P6 · Seller Central — **POST-G1 in v2.0**
+**Weeks 9.5–11 in the v1.0 plan · 10% · Stories M5-01 → M5-06**
+
+> **Why it moved.** D-001 already says self-service sellers come after delivery works. Building seller
+> onboarding, KYC and a seller dashboard before there are sellers is the most expensive speculation in
+> the original plan. At launch we have five suppliers and consignment; one monthly payout run, done by
+> hand, is the correct system. Seller Central starts after G1, funded by trading.
 
 > **Objective:** a seller can run themselves without phoning you.
 
@@ -390,17 +488,18 @@ per-country compliance.
 ## 3. Dependency map
 
 ```
-P0 ──▶ P1 ──▶ P2 ──▶ P3 ──┐
-  │                        │
-  └──▶ PSP contract ───────┴──▶ P4 ──▶ P5 ──▶ P6 ──▶ P7 ──▶ P8 ──▶ LAUNCH
-                                                                    │
-                            photography (P0 booked) ──┘             ▼
-                                                        P9 (G1) ──▶ P10 (G2) ──▶ P11 (G3) ──▶ P12 (G4) ──▶ P13 (G5)
+S0 ──▶ B1 (till) ──┬──▶ B3 (route) ──▶ B4 ──▶ B5 ──▶ B6 LAUNCH ──▶ B7 (G1)
+ │                 │                                                │
+ │                 └──▶ B2 (shelf, parallel)                        ▼
+ └──▶ PSP contract ──────────────────────────────▶  P6 (G2) ──▶ P11 (G3) ──▶ P12 (G4) ──▶ P13 (G5)
 ```
 
-**The two hard dependencies:**
-- **P4 cannot start without the PSP contract.** Everything before it can.
-- **P2 cannot finish without photography.** A builder cannot photograph products; the founder must.
+**The three hard dependencies, restated for the new order:**
+- **B1 cannot finish without the PSP contract.** It is the only true critical path, and its underwriting
+  runs in parallel from day 2. Everything else is buffered by the sprint, not by hope.
+- **B2 cannot finish without photography and supplier prices.** Both are founder work with a two-week
+  lead time. A builder cannot photograph a product or negotiate a wholesale price.
+- **B3 cannot ship orders B1 cannot take.** Delivery before payment is a refund queue.
 
 Everything else is soft and can be re-sequenced without breaking anything.
 
@@ -421,62 +520,69 @@ A gate is not a feeling. At each gate, these artifacts must exist **before** the
 
 ---
 
-## 5. Cash by phase, and an honest reconciliation
+## 5. Cash to get started, and an honest reconciliation
 
-| Phase | Cash out | Cumulative |
+| Build | Cash | Cumulative |
 |---|---|---|
-| P0 Readiness | P25,000 | P25,000 |
-| P1–P3 Foundation, Catalogue, Storefront | P81,000 | P106,000 |
-| P4 Money | P54,000 | P160,000 |
-| P5–P8 Fulfilment, Seller, Admin, Hardening | P45,000 | P205,000 |
-| Inventory and working capital float | P80,000 | P285,000 |
-| P9 Trading pilot (8 weeks of incremental pilot spend) | P40,000 | **P325,000** |
-| Contingency (20%) | P65,000 | **≈ P390,000** |
-| **Operating losses absorbed M1–M5 (the cash trough)** `[A1]` | P114,000 | **≈ P504,000** |
-| Total if an engineer is hired at M4, low band `[A5]` | +P153,000 of loss | **≈ P657,000** |
+| S0 Sprint Zero (entity, licences, insurance, legal, photography brief) | P22,000 | P22,000 |
+| B1 The Till | P30,000 | P52,000 |
+| B2 The Shelf (incl. photography) | P35,000 | P87,000 |
+| B3 The Route | P25,000 | P112,000 |
+| B4 Trust + B5 Hardening | P18,000 | P130,000 |
+| Storage fit-out (shelving, bins, scanner, printer, scale) | P14,000 | P144,000 |
+| Rider setup (scooter deposit, insurance, phone) | P12,000 | P156,000 |
+| Opening inventory, 40 SKUs | P55,000 | P211,000 |
+| B6 Soft launch (marketing, packaging, float) | P15,000 | P226,000 |
+| Contingency (20%) | P45,000 | **≈ P271,000** |
+| **Operating losses absorbed M1–M5 (the cash trough)** `[A1]` | P114,000 | **≈ P385,000** |
+| If an engineer is hired at M4, low band `[A5]` | +P153,000 of loss | **≈ P538,000** |
 
-**Two lines in that table did not exist in v1.0 and both are real.**
+**Three lines in this table are the whole plan.**
 
-The **P114,000 operating trough** is the cumulative loss the business runs before it turns in month 6
-(`model/afrikart-unit-economics.xlsx` → `Ramp`). It is not build cost and it is not covered by the
-contingency: contingency pays for things going wrong, the trough pays for the months going *right*. What
-makes the pilot expensive is not the software, it is the density we have to buy with time. Read the
-number as **≈P500,000 to reach a business that funds itself**, not P390,000 to open the doors.
+The **P114,000 trough** is the cumulative operating loss before the business turns in month 6
+(`model/afrikart-unit-economics.xlsx` → `Ramp`, and the engineer scenarios below the ramp). It is not
+build cost and the contingency does not cover it: contingency pays for things going wrong, the trough pays
+for the months going *right*. Read the total as **≈P385,000 to a business that funds itself**, not
+P270,000 to open the doors.
 
-The **engineer line** is the honest cost of calling ourselves a technology company. From month 4,
-P35–55k/month over nine months moves the trough from P114,000 to P267,000–P423,000 and pushes
-break-even from month 6 to month 11 — or beyond month 12 at the top of the band. Priced in full on the
-`Ramp` sheet. This is decision **D-008** and it is a founders' decision, not a document's: fund the hire
-and raise P650–800k, run a 40-hour/month retainer, or drop the pillar from the pitch. All three are
-legitimate. Only the unstated version is not.
+The **engineer line** is the price of the technology pillar. P35–55k/month from month 4 moves the trough
+to P267,000–P423,000 and pushes break-even from month 6 to month 11 or beyond. Decision **D-008**, and it
+is the founders' to make: fund the hire, run a 40-hour/month retainer, or drop the pillar from the pitch.
+
+The **contingency** is 20% and it is not a cushion for scope creep. **B6 is where the plan meets reality,
+and B6 is where the money runs out if there is no buffer.**
 
 ### The reconciliation you need to see
 
-`000-founding-decisions.md` estimated the 90-day pilot at **P220,000–260,000**. That figure included
-operations and working capital, and assumed **no paid developer** — which was correct at the time,
-because the recommendation then was to validate before spending on engineering.
+`000-founding-decisions.md` estimated the 90-day pilot at **P220,000–260,000**, including operations and
+working capital, assuming no paid developer. v1.0 of this document, with a full 13-week contracted build,
+restated that as **P325,000 to launch and P390,000 with contingency** — and v1.2 of the framework added the
+P114,000 trough on top.
 
-With a contracted professional build at P120,000–250,000, the honest number to reach a live,
-revenue-taking, ledger-correct platform is:
+v2.0 brings it back down by removing scope rather than by pretending:
 
-> **≈ P325,000 to launch, ≈ P390,000 with contingency.**
+> **≈ P270,000 to open the doors. ≈ P385,000 to a self-funding business.**
 
-Three ways to close the gap, and only three:
+That is within P10,000 of the founders' original estimate — which is a good sign, not a coincidence: the
+original number was roughly right for a *shop with a route*, and the 13-week plan was right for a
+*marketplace*. We are building the shop first.
+
+Three ways to close any remaining gap, and only three:
 
 1. **Raise it** — founder capital plus CEDA/BDC once three months of clean accounts exist.
-2. **Founder builds P1–P3** with a senior contractor reviewing weekly, and pays for P4 onward. Saves
-   roughly P80,000 and costs 3–4 weeks.
-3. **Take the fallback** — single-vendor Shopify store with 20 SKUs, 60 days, ~P40,000, and prove
-   demand while you raise. Keeps the whole architecture for later.
+2. **Founder builds B2** (opening stock at cost, P10,000) and pays for the rest. Saves roughly P60,000 on
+   the build contract and costs 3–4 weeks.
+3. **Take the fallback** — single-vendor Shopify store with 20 SKUs, 60 days, ~P40,000, prove demand while
+   you raise, and keep the architecture.
 
-What you must not do is reduce the contingency. **P9 is where the plan meets reality, and P9 is where
-the money runs out if there is no buffer** — and the trough, not the build, is what empties it.
+What you must not do is reduce the contingency or skip Sprint Zero. **S0 is P22,000 that decides whether
+the other P249,000 is spent well.**
 
 ---
 
 ## 6. Rules of execution
 
-1. **One phase at a time.** New features never start before the current gate passes.
+1. **One build phase at a time.** The founder's commercial and catalogue track (S0, B2) runs in parallel by design; two *builders* on two phases at once is how both finish late.
 2. **Exit evidence lives in `docs/registers/`,** not in a WhatsApp message or a verbal assurance.
 3. **The founder signs off the acceptance criteria,** not the builder. A builder demonstrating their
    own work is not a review.
@@ -496,15 +602,17 @@ the money runs out if there is no buffer** — and the trough, not the build, is
 
 | Phase | Stories | Count |
 |---|---|---|
-| P1 Foundation | M0-01 … M0-06 | 6 |
+| P1 Foundation | M0-01 … M0-07 | 7 |
 | P2 Catalogue | M1-01 … M1-07 | 7 |
 | P3 Storefront | M2-01 … M2-06 | 6 |
 | P4 Money | M3-01 … M3-09 | 9 |
-| P5 Fulfilment | M4-01 … M4-06 | 6 |
+| P5 Fulfilment | M4-01 … M4-07 | 7 |
 | P6 Seller Central | M5-01 … M5-06 | 6 |
 | P7 Admin & Ops | M6-01 … M6-05 | 5 |
 | P8 Hardening | M7-01 … M7-06 | 6 |
-| **v1 total** | | **51** |
+| **v1 total** | | **53** |
+| *of which at Route One launch (B1–B6)* | M0-01…M0-07, M1-01…M1-05, M2-01…M2-04, M3-01…M3-09, M4-01…M4-07, M7-01…M7-06 | **38** |
+| *of which post-G1* | M1-06/07, M2-05/06, M5-01…M5-06, M6-01…M6-05 | **15** |
 | P10 Retention + 3P fulfilment | new stories at G1 | ~11 |
 | P11 Marketplace | new stories at G2 | ~12 |
 | P12 Distribution & B2B at scale | new stories at G3 | ~14 |
