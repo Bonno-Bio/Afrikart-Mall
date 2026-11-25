@@ -1,5 +1,5 @@
 /**
- * The API for B1 — The Till.
+ * The API for B2 — The Till and The Shelf.
  *
  * Auth is a stand-in until M0-03 (phone OTP) lands: `x-user-id` is trusted in
  * development only, and the server refuses to start without an explicit
@@ -16,6 +16,13 @@ import { recordDelivery } from './delivery.js';
 import { refundLine, completeRefund } from './refunds.js';
 import { issueInvoice, renderInvoice } from './invoice.js';
 import { trialBalance } from './ledger.js';
+import {
+  receivePurchaseOrder,
+  publishProduct,
+  shelfReport,
+  publicCatalogue,
+  marginByOrder,
+} from './catalogue.js';
 
 export function verifyWebhookSignature(rawBody, signature, secret) {
   if (!secret) return false;
@@ -200,6 +207,56 @@ export function createApp({ db, webhookSecret = process.env.PSP_WEBHOOK_SECRET, 
   app.get('/api/ops/ledger', async (_req, res, next) => {
     try {
       res.json(await trialBalance(db));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // B2 — The Shelf. Public catalogue is a different shape from the ops shelf on
+  // purpose: a public endpoint that leaks landed cost hands away the margin.
+  // -------------------------------------------------------------------------
+  app.get('/api/catalogue', async (req, res, next) => {
+    try {
+      res.json(await publicCatalogue(db, { sellerSlug: req.query.seller ?? null }));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  app.get('/api/ops/shelf', async (_req, res, next) => {
+    try {
+      res.json(await shelfReport(db));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  app.post('/api/ops/products/:id/publish', async (req, res, next) => {
+    try {
+      res.json(await publishProduct(db, { productId: req.params.id, actorId: currentUser(req) }));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  app.post('/api/ops/purchase-orders/:poNumber/receive', async (req, res, next) => {
+    try {
+      const result = await receivePurchaseOrder(db, {
+        poNumber: req.params.poNumber,
+        note: req.body?.note ?? null,
+        receivedBy: currentUser(req),
+      });
+      res.status(201).json(result);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  app.get('/api/ops/margin', async (req, res, next) => {
+    try {
+      const limit = Math.min(Number(req.query.limit ?? 50) || 50, 500);
+      res.json(await marginByOrder(db, { limit }));
     } catch (err) {
       next(err);
     }

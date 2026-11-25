@@ -26,7 +26,12 @@ export const IDS = {
   variantFormula: '99999999-9999-4999-8999-999999999991',
   variantNappies: '99999999-9999-4999-8999-999999999992',
   variantLotion: '99999999-9999-4999-8999-999999999993',
+  supplier: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1',
+  purchaseOrder: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1',
 };
+
+import { receivePurchaseOrder } from '../src/catalogue.js';
+import { post, ACCOUNTS } from '../src/ledger.js';
 
 export async function seed(db) {
   await db.query(
@@ -92,19 +97,70 @@ export async function seed(db) {
     ],
   );
 
-  for (const [variant, qty] of [
-    [IDS.variantFormula, 40],
-    [IDS.variantNappies, 30],
-    [IDS.variantLotion, 60],
+  // Opening capital. A business with stock and no equity in its books cannot
+  // tell you whether it is solvent, so the float goes in before the stock does.
+  // Inside one transaction on purpose: the balance trigger is deferred to COMMIT,
+  // so posting a two-sided entry outside a transaction is refused after the first
+  // side lands. That is the constraint doing its job.
+  await db.transaction(async (tx) =>
+    post(tx, {
+      kind: 'opening_capital',
+      memo: 'founder float, pilot',
+      entries: [
+        { accountCode: ACCOUNTS.BANK, debit: 5000000 },
+        { accountCode: '3000', credit: 5000000 },
+      ],
+    }),
+  );
+
+  // The shelf arrives the way it really will: a seller consigns stock to us at a
+  // known cost, and a receipt moves the quantity. The stock is NOT our asset —
+  // we hold it for someone else — so the receipt does not touch our ledger. B1
+  // seeded stock as a bare number; this is the gap B2 closes.
+  await db.query(
+    `insert into suppliers (id, name, country, payment_terms_days, lead_time_days, min_order_minor, contact_name)
+     values ($1, 'Naledi Beauty Supply — consignment', 'BW', 0, 5, 0, 'Naledi Kgosi')`,
+    [IDS.supplier],
+  );
+
+  await db.query(
+    `insert into purchase_orders (id, po_number, supplier_id, status, ordered_at, currency, total_minor, inventory_owner)
+     values ($1, 'PO-2026-0001', $2, 'ordered', now() - interval '3 days', 'BWP', 0, 'seller')`,
+    [IDS.purchaseOrder, IDS.supplier],
+  );
+
+  // Real buy prices against the real shelf prices: formula 189.00 sells for
+  // 140.00, nappies 215.00 for 165.00, lotion 98.00 for 70.00. Freight is the
+  // trip that actually happens, P450 for the load.
+  for (const [variant, qty, unitCost] of [
+    [IDS.variantFormula, 40, 14000],
+    [IDS.variantNappies, 30, 16500],
+    [IDS.variantLotion, 60, 7000],
   ]) {
     await db.query(
-      `insert into inventory_movements (variant_id, delta, reason, note) values ($1, $2, 'received', 'opening stock')`,
-      [variant, qty],
+      `insert into purchase_order_lines (purchase_order_id, variant_id, quantity, unit_cost_minor)
+       values ($1, $2, $3, $4)`,
+      [IDS.purchaseOrder, variant, qty, unitCost],
     );
-    await db.query(
-      `insert into inventory_levels (variant_id, on_hand, bin_code, pick_sequence) values ($1, $2, $3, $4)`,
-      [variant, qty, `B1-0${qty % 9}`, qty % 9],
-    );
+  }
+
+  await db.query(`update purchase_orders set freight_minor = 45000, total_minor = 1475000 + 45000 where id = $1`, [
+    IDS.purchaseOrder,
+  ]);
+
+  await receivePurchaseOrder(db, { poNumber: 'PO-2026-0001', note: 'opening stock' });
+
+  // Bin locations are a warehouse fact, not an accounting one.
+  for (const [variant, bin, seq] of [
+    [IDS.variantFormula, 'B1-01', 1],
+    [IDS.variantNappies, 'B1-02', 2],
+    [IDS.variantLotion, 'B1-03', 3],
+  ]) {
+    await db.query(`update inventory_levels set bin_code = $2, pick_sequence = $3 where variant_id = $1`, [
+      variant,
+      bin,
+      seq,
+    ]);
   }
 
   await db.query(

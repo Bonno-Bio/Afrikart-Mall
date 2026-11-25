@@ -15,6 +15,7 @@
  */
 import { AppError } from './errors.js';
 import { post, ACCOUNTS } from './ledger.js';
+import { landedCosts } from './catalogue.js';
 
 const REFUND_SLA_HOURS = 48;
 const NON_RESTOCKABLE = new Set(['DAMAGED']);
@@ -32,9 +33,11 @@ export async function refundLine(
     const res = await tx.query(
       `select i.id, i.order_id, i.seller_id, i.title_snapshot, i.quantity, i.line_subtotal_minor,
               i.vat_minor, i.commission_minor, i.fulfilment_minor, i.seller_payable_minor,
-              i.status, i.variant_id,
+              i.status, i.variant_id, v.ownership,
               o.order_number, o.status as order_status
-         from order_items i join orders o on o.id = i.order_id
+         from order_items i
+         join orders o on o.id = i.order_id
+         left join product_variants v on v.id = i.variant_id
         where i.id = $1
         for update of i`,
       [orderItemId],
@@ -130,6 +133,26 @@ export async function refundLine(
         `update inventory_levels set on_hand = on_hand + $2, updated_at = now() where variant_id = $1`,
         [line.variant_id, line.quantity],
       );
+
+      // The goods are back on the shelf, so their cost comes back out of cost of
+      // sales and into inventory. Without this, a refunded order keeps a cost
+      // that is no longer true and every margin after it is wrong.
+      // Only stock we bought carries a cost we posted. Consignment goods never
+      // entered our inventory, so there is nothing to put back.
+      const cost = line.ownership === 'afrikart' ? (await landedCosts(tx)).get(line.variant_id) : null;
+      if (cost && cost.unitCostMinor > 0) {
+        const restockedValue = cost.unitCostMinor * Number(line.quantity);
+        await post(tx, {
+          kind: 'cogs_reversal',
+          refType: 'order',
+          refId: line.order_id,
+          memo: `restocked ${line.title_snapshot}`,
+          entries: [
+            { accountCode: ACCOUNTS.INVENTORY, debit: restockedValue },
+            { accountCode: ACCOUNTS.COGS, credit: restockedValue },
+          ],
+        });
+      }
     }
 
     await tx.query(

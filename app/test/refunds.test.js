@@ -51,6 +51,7 @@ test('a mobile-money reversal carries a 48-hour promise instead of a vague apolo
   const db = await freshDb();
   try {
     const { line } = await deliveredOrder(db);
+    const bankBefore = await balance(db, ACCOUNTS.BANK);
     const refund = await refundLine(db, { orderItemId: line.id, channel: 'original_method', reason: 'REFUSED' });
 
     assert.equal(refund.status, 'pending');
@@ -159,12 +160,17 @@ test('settling a reversal moves money out of the bank and clears the liability',
   const db = await freshDb();
   try {
     const { line } = await deliveredOrder(db);
+    const bankBefore = await balance(db, ACCOUNTS.BANK);
     const refund = await refundLine(db, { orderItemId: line.id, channel: 'original_method', reason: 'REFUSED' });
     const settled = await completeRefund(db, { refundId: refund.id, providerRef: 'MM-REV-1' });
 
     assert.equal(settled.status, 'completed');
     assert.equal(await balance(db, ACCOUNTS.CUSTOMER_PREPAYMENTS), 0);
-    assert.equal(await balance(db, ACCOUNTS.BANK), -Number(line.line_subtotal_minor));
+    assert.equal(
+      (await balance(db, ACCOUNTS.BANK)) - bankBefore,
+      -Number(line.line_subtotal_minor),
+      'the cash must leave the bank',
+    );
     assert.equal((await trialBalance(db)).balanced, true);
 
     const again = await completeRefund(db, { refundId: refund.id });

@@ -6,6 +6,8 @@ import { post, ACCOUNTS, trialBalance, balance } from '../src/ledger.js';
 test('an unbalanced posting is refused before it reaches the database', async () => {
   const db = await freshDb();
   try {
+    const { rows } = await db.query('select count(*)::int as n from ledger_transactions');
+    const before = rows[0].n;
     await assert.rejects(
       () =>
         db.transaction((tx) =>
@@ -19,8 +21,10 @@ test('an unbalanced posting is refused before it reaches the database', async ()
         ),
       /unbalanced/i,
     );
-    const entries = await db.query('select count(*)::int as n from ledger_entries');
-    assert.equal(entries.rows[0].n, 0, 'a rejected posting must leave no rows behind');
+    // The seed posts opening capital and a stock receipt, so "empty" is the wrong
+    // assertion; "unchanged" is the real one.
+    const txn = await db.query('select count(*)::int as n from ledger_transactions');
+    assert.equal(txn.rows[0].n, before, 'a rejected posting must leave no rows behind');
   } finally {
     await db.close();
   }
@@ -72,6 +76,7 @@ test('the database itself refuses an unbalanced transaction, even by hand', asyn
 test('a balanced posting lands, and balances are derived rather than stored', async () => {
   const db = await freshDb();
   try {
+    const bankBefore = await balance(db, ACCOUNTS.BANK);
     await db.transaction((tx) =>
       post(tx, {
         kind: 'capital',
@@ -82,7 +87,7 @@ test('a balanced posting lands, and balances are derived rather than stored', as
         ],
       }),
     );
-    assert.equal(await balance(db, ACCOUNTS.BANK), 25000000);
+    assert.equal((await balance(db, ACCOUNTS.BANK)) - bankBefore, 25000000);
     const tb = await trialBalance(db);
     assert.equal(tb.balanced, true);
     assert.equal(tb.debit, tb.credit);

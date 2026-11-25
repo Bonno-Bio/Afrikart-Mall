@@ -9,6 +9,7 @@
 import { AppError } from './errors.js';
 import { post, ACCOUNTS } from './ledger.js';
 import { issueInvoice } from './invoice.js';
+import { postCogs } from './catalogue.js';
 import { vatFromInclusive } from './money.js';
 
 export async function recordDelivery(db, { orderNumber, cashCollectedMinor = null, riderId = null }) {
@@ -115,6 +116,11 @@ export async function recordDelivery(db, { orderNumber, cashCollectedMinor = nul
       entries: postingEntries,
     });
 
+    // The other half of the sale: what the goods cost us. Posted in the same
+    // transaction as the revenue, because a sale recognised without its cost is
+    // a margin the owner will make decisions on and should not.
+    const cogs = await postCogs(tx, { orderId: order.id, orderNumber: order.order_number });
+
     await tx.query(`update orders set status = 'delivered' where id = $1`, [order.id]);
     await tx.query(
       `insert into order_events (order_id, event, detail, actor_type)
@@ -127,14 +133,27 @@ export async function recordDelivery(db, { orderNumber, cashCollectedMinor = nul
 
     const invoice = await issueInvoice(tx, order.id);
 
+    // What Afrikart actually keeps, VAT excluded: commission, fulfilment and the
+    // net of delivery and the cash-handling fee. VAT was never ours.
+    const keptMinor = commission + fulfilment + (deliveryMinor - deliveryVat) + (codFeeMinor - codVat);
+
     return {
       orderNumber: order.order_number,
       status: 'delivered',
       cashCollectedMinor: cash,
       commissionMinor: commission,
+      deliveryMinor,
       fulfilmentMinor: fulfilment,
       sellerPayableMinor: payable,
       invoiceNumber: invoice.invoice_number,
+      cogsMinor: cogs.cogsMinor,
+      sellerCostMinor: cogs.sellerCostMinor,
+      cogsUnresolved: cogs.unresolved,
+      keptMinor,
+      // What Afrikart kept, less what the goods cost Afrikart. Consignment stock
+      // costs us nothing, so this is positive; the seller's own cost is reported
+      // beside it rather than subtracted from our margin.
+      grossMarginMinor: cogs.unresolved.length === 0 ? keptMinor - cogs.cogsMinor : null,
       alreadyDelivered: false,
     };
   });

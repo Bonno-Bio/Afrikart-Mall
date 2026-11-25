@@ -229,6 +229,13 @@ create table product_variants (
   parcel_class   text not null default 'small'
                    check (parcel_class in ('small','bulky','fragile','cold')),
   is_active      boolean not null default true,
+  -- Who owns these units while they sit on our shelf? In the pilot the seller
+  -- does: we hold consignment stock, we do not buy it. That single word decides
+  -- whether the goods are an asset on our balance sheet and whether a sale has
+  -- a cost of goods at all. Getting it wrong is how a marketplace reports a
+  -- negative margin on every sale it makes.
+  ownership      text not null default 'seller'
+                   check (ownership in ('seller','afrikart')),
   unique (product_id, sku)
 );
 create unique index on product_variants (sku);
@@ -505,6 +512,10 @@ create table purchase_orders (
   payment_terms_days integer not null default 0,
   due_at             date,
   paid_at            timestamptz,
+  -- 'afrikart' = we bought it (inventory asset, COGS on sale).
+  -- 'seller'   = consignment: the seller's goods on our shelf, the seller's cost.
+  inventory_owner    text not null default 'afrikart'
+                       check (inventory_owner in ('afrikart','seller')),
   created_by         uuid references users(id),
   created_at         timestamptz not null default now()
 );
@@ -519,6 +530,27 @@ create table purchase_order_lines (
   quantity       integer not null check (quantity > 0),
   unit_cost_minor bigint not null check (unit_cost_minor >= 0)
 );
+
+-- Stock we hold but do not own. This is deliberately NOT on the balance sheet:
+-- counting a seller's goods as our asset inflates the company and makes every
+-- ratio a lie. It is here because the warehouse still has to count it.
+create view consignment_stock_value as
+select v.id as variant_id, v.sku, p.title, s.trading_name as seller,
+       coalesce(l.on_hand, 0) as on_hand,
+       coalesce(avg_cost.unit_cost_minor, 0) as seller_unit_cost_minor,
+       coalesce(l.on_hand, 0) * coalesce(avg_cost.unit_cost_minor, 0) as seller_value_minor
+from product_variants v
+join products p on p.id = v.product_id
+join sellers s on s.id = p.seller_id
+left join inventory_levels l on l.variant_id = v.id
+left join lateral (
+  select round(sum(pol.quantity * pol.unit_cost_minor)::numeric / nullif(sum(pol.quantity), 0))::bigint
+           as unit_cost_minor
+    from purchase_order_lines pol
+    join purchase_orders po on po.id = pol.purchase_order_id
+   where pol.variant_id = v.id and po.status = 'received'
+) avg_cost on true
+where v.ownership = 'seller';
 
 -- What we owe suppliers right now, and when. The mirror of seller payouts.
 create view supplier_payables as

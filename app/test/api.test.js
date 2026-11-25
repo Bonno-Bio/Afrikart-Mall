@@ -98,6 +98,9 @@ test('a webhook with the wrong signature is rejected and changes nothing', async
       body: { items: cart, addressId: IDS.addressVerified, deliveryMethod: 'express', paymentMethod: 'card' },
     });
 
+    const { rows: txns } = await db.query('select count(*)::int as n from ledger_transactions');
+    const txnsBefore = txns[0].n;
+
     const res = await call('/api/webhooks/psp', {
       method: 'POST',
       headers: { 'x-psp-signature': 'deadbeef' },
@@ -106,8 +109,10 @@ test('a webhook with the wrong signature is rejected and changes nothing', async
     assert.equal(res.status, 401);
     assert.equal(res.body.error.code, 'BAD_SIGNATURE');
 
+    // Seeded postings already exist; what matters is that the rejected webhook
+    // added none of its own.
     const ledger = await db.query('select count(*)::int as n from ledger_transactions');
-    assert.equal(ledger.rows[0].n, 0);
+    assert.equal(ledger.rows[0].n, txnsBefore);
   });
 });
 
