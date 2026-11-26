@@ -13,13 +13,13 @@
 
 The seed sets Baby & Mother to **8% + 4%**, down from 12% + 6%, because the numbers in `docs/010` §7 left the seller underwater on all three SKUs. What that change actually bought:
 
-| SKU | Price | Net before commission | Commission 8% + 4% | **Seller net** | Landed cost | Seller spread |
-|---|---|---|---|---|---|---|
-| NAN-OP3-400 | P189.00 | P165.79 | P21.19 | **P144.60** | P144.27 | **+P0.33** |
-| NIV-BGL-200 | P98.00 | P85.96 | P10.99 | **P74.97** | P72.14 | **+P2.83** |
-| PAM-BDP-M46 | P215.00 | P188.60 | P24.12 | **P164.48** | P170.03 | **−P5.55** |
+| SKU | Price | Net before take | Commission 8% | Fulfilment 4% | **Seller net** | Landed cost | Seller spread |
+|---|---|---|---|---|---|---|---|
+| NAN-OP3-400 | P189.00 | P165.79 | P13.26 | P6.63 | **P145.90** | P144.27 | **+P1.63** |
+| NIV-BGL-200 | P98.00 | P85.96 | P6.88 | P3.44 | **P75.64** | P72.14 | **+P3.50** |
+| PAM-BDP-M46 | P215.00 | P188.60 | P15.09 | P7.54 | **P165.97** | P170.03 | **−P4.06** |
 
-Two SKUs are now viable at a margin so thin it is barely a margin, and one is still losing money.
+Two SKUs are now viable at a margin so thin it is barely a margin (1.1% and 4.9% of the seller's net), and one is still losing money. These are the live figures from `GET /api/ops/shelf`, not a worked example.
 
 **The finding that matters more than the fix:** cutting the take from 18% to 12% was not enough. The nappies still fail, because a P170 landed cost against a P215 shelf price leaves P45 of gross spread for the whole chain — and 12% of it is ours. No plausible commission rate fixes that SKU. It has to be repriced (to roughly P229) or dropped from the opening ten. That is a supplier conversation, not a code change, and the system now says so out loud: `shelfReport.summary.sellersUnderwater` returns `['PAM-BDP-M46']`.
 
