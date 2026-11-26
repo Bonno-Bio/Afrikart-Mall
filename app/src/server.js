@@ -12,7 +12,7 @@ import express from 'express';
 import { AppError } from './errors.js';
 import { quote, placeOrder } from './orders.js';
 import { capturePayment, loadOrder } from './payments.js';
-import { recordDelivery } from './delivery.js';
+import { recordDelivery, recordFailedAttempt } from './delivery.js';
 import { refundLine, completeRefund } from './refunds.js';
 import { issueInvoice, renderInvoice } from './invoice.js';
 import { trialBalance } from './ledger.js';
@@ -30,7 +30,7 @@ import { decideStocktakeIncidents, openStocktakeIncidents } from './shrinkage.js
 import { buyPackaging, packAnOrder, packagingQuote, packagingReport } from './packaging.js';
 import { orderMargins, marginBySeller } from './profitability.js';
 import { openRun, closeRun, lastMileReport, riderPayable, recordPspFee } from './lastmile.js';
-import { dispatchPlan, rateCard } from './dispatch.js';
+import { dispatchPlan, dayClose, rateCard } from './dispatch.js';
 import { requestOtp, verifyOtp, userFromToken, revokeSession, listSessions } from './auth.js';
 import { createSmsSender, productionReadiness } from './sms.js';
 
@@ -514,6 +514,34 @@ export function createApp({
       requireAdmin(req);
       const runDate = req.query.date ?? new Date().toISOString().slice(0, 10);
       res.json(await dispatchPlan(db, { runDate, routeId: req.query.routeId ?? null }));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // What was planned against what actually happened.
+  app.get('/api/ops/dispatch/day-close', async (req, res, next) => {
+    try {
+      requireAdmin(req);
+      const runDate = req.query.date ?? new Date().toISOString().slice(0, 10);
+      res.json(await dayClose(db, { runDate, routeId: req.query.routeId ?? null }));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // A drop that did not happen. Repeatable: three attempts are three attempts.
+  app.post('/api/ops/orders/:number/failed-attempt', async (req, res, next) => {
+    try {
+      requireAdmin(req);
+      res.status(201).json(
+        await recordFailedAttempt(db, {
+          orderNumber: req.params.number,
+          reasonCode: req.body?.reasonCode,
+          note: req.body?.note ?? null,
+          riderId: req.body?.riderId ?? null,
+        }),
+      );
     } catch (err) {
       next(err);
     }

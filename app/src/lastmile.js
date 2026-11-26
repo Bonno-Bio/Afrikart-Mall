@@ -43,21 +43,64 @@ export function splitPerDrop(totalMinor, drops) {
   return Array.from({ length: drops }, (_, i) => base + (i < remainder ? 1 : 0));
 }
 
-/** Open a run. Nothing is posted until it closes, because nothing is known. */
+/**
+ * Open a run. Nothing is posted until it closes, because nothing is known.
+ *
+ * The drops expected on it are captured now, at the moment of the decision. A
+ * plan compared against a plan recomputed at midnight is not a plan — it is a
+ * description of what happened, wearing the word "planned".
+ */
 export async function openRun(db, { routeId = null, riderId = null, runDate, riderPayMinor = 0, fuelMinor = 0, note = null } = {}) {
   if (!runDate) throw new AppError(422, 'RUN_DATE_REQUIRED', 'A run needs a date.', { field: 'runDate' });
+
+  // A rider's day is a route day. When the caller names a rider but no route,
+  // take the route that rider is actually carrying — otherwise the run cannot be
+  // reconciled against the route it belongs to at day close.
+  let route = routeId;
+  if (!route && riderId) {
+    const inferred = await db.query(
+      `select d.route_id
+         from deliveries d
+        where d.rider_id = $1 and d.route_id is not null
+          and coalesce(d.delivered_at::date, d.first_attempt_at::date, d.scheduled_date) = $2::date
+        group by d.route_id
+        order by count(*) desc
+        limit 2`,
+      [riderId, runDate],
+    );
+    if (inferred.rows.length === 1) route = inferred.rows[0].route_id;
+  }
+
+  const plannedRes = await db.query(
+    `select count(*)::int as planned
+       from deliveries d
+      where d.status in ('pending','assigned','out_for_delivery','delivered','failed')
+        and coalesce(d.delivered_at::date, d.first_attempt_at::date, d.scheduled_date) = $1::date
+        and ($2::uuid is null or d.route_id = $2)
+        and ($3::uuid is null or d.rider_id = $3)`,
+    [runDate, route, riderId],
+  );
+  const plannedDrops = plannedRes.rows[0] ? Number(plannedRes.rows[0].planned) : null;
+
   const res = await db.query(
-    `insert into last_mile_runs (route_id, rider_id, run_date, rider_pay_minor, fuel_minor, note)
-     values ($1, $2, $3, $4, $5, $6)
-     returning id, run_date, status, rider_pay_minor, fuel_minor, cost_minor`,
-    [routeId, riderId, runDate, riderPayMinor, fuelMinor, note],
+    `insert into last_mile_runs (route_id, rider_id, run_date, planned_drops, rider_pay_minor, fuel_minor, note)
+     values ($1, $2, $3, $4, $5, $6, $7)
+     returning id, run_date, status, route_id, planned_drops, rider_pay_minor, fuel_minor, cost_minor`,
+    [route, riderId, runDate, plannedDrops, riderPayMinor, fuelMinor, note],
   );
   const run = res.rows[0];
   return {
     runId: run.id,
     runDate: run.run_date,
     status: run.status,
+    routeId: run.route_id ?? route,
+    // Whether the route was named by the caller or taken from the rider's work.
+    // A run that silently invents a route would be a lie; a run that names how it
+    // got one can be checked.
+    routeSource: routeId ? 'declared' : route ? 'inferred_from_work' : null,
+    riderId,
     costMinor: num(run.rider_pay_minor) + num(run.fuel_minor),
+    plannedDrops: run.planned_drops === null ? null : Number(run.planned_drops),
     drops: 0,
     perDropMinor: null,
   };
@@ -87,37 +130,60 @@ export async function closeRun(db, { runId, actorId = null } = {}) {
       throw new AppError(422, 'RUN_HAS_NO_COST', 'A run with no rider pay and no fuel has nothing to allocate.');
     }
 
-    // The drops that actually rode: delivered, on this route and rider if the
-    // run names them, and on the run's date by the day the parcel arrived (or
-    // the day it was scheduled for, when the two disagree).
-    const dropsRes = await tx.query(
-      `select d.order_id, o.order_number, d.delivered_at
+    // Everything that rode: delivered drops and failed attempts, on this route
+    // and rider if the run names them, and on the run's date by the day the
+    // parcel arrived (or the day it was scheduled for, when the two disagree).
+    // A failed attempt is in the trip; it is only excluded from what a customer
+    // can be charged.
+    const attemptsRes = await tx.query(
+      `select d.order_id, o.order_number, d.status, d.delivered_at
          from deliveries d
          join orders o on o.id = d.order_id
-        where d.status = 'delivered'
+        where d.status in ('delivered', 'failed')
           and ($1::uuid is null or d.route_id = $1)
           and ($2::uuid is null or d.rider_id = $2)
-          and coalesce(d.delivered_at::date, d.scheduled_date) = $3
-          and not exists (select 1 from last_mile_allocations a where a.order_id = d.order_id)
+          and coalesce(d.delivered_at::date, d.first_attempt_at::date, d.scheduled_date) = $3
+          and (
+            d.status = 'failed'
+            or not exists (select 1 from last_mile_allocations a where a.order_id = d.order_id)
+          )
         order by d.delivered_at nulls last, o.order_number`,
       [run.route_id, run.rider_id, run.run_date],
     );
 
-    const drops = dropsRes.rows.length;
-    if (drops === 0) {
+    // Failed attempts can repeat at one address, and each one burned fuel.
+    const failedRes = await tx.query(
+      `select d.order_id, coalesce(d.attempt_count, 1)::int as attempts
+         from deliveries d
+        where d.status = 'failed'
+          and ($1::uuid is null or d.route_id = $1)
+          and ($2::uuid is null or d.rider_id = $2)
+          and coalesce(d.first_attempt_at::date, d.scheduled_date) = $3`,
+      [run.route_id, run.rider_id, run.run_date],
+    );
+    const failedAttempts = failedRes.rows.reduce((a, r) => a + Math.max(1, Number(r.attempts)), 0);
+
+    const delivered = attemptsRes.rows.filter((r) => r.status === 'delivered');
+    const drops = delivered.length;
+    const attempts = drops + failedAttempts;
+    if (attempts === 0) {
       throw new AppError(
         422,
         'NO_DROPS',
-        'No delivered orders rode on this run on that date, so there is nothing to cost.',
+        'No delivered orders and no failed attempts rode on this run on that date, so there is nothing to cost.',
         { field: 'runDate' },
       );
     }
 
-    const shares = splitPerDrop(totalMinor, drops);
+    // The divisor is attempts, not drops: a trip that knocked on nine doors and
+    // delivered five cost the same fuel as one that delivered nine.
+    const shares = splitPerDrop(totalMinor, attempts);
     const allocations = [];
+    let allocatedMinor = 0;
     for (let i = 0; i < drops; i += 1) {
-      const drop = dropsRes.rows[i];
+      const drop = delivered[i];
       const amountMinor = shares[i];
+      allocatedMinor += amountMinor;
       await tx.query(
         `insert into last_mile_allocations (run_id, order_id, amount_minor) values ($1, $2, $3)`,
         [run.id, drop.order_id, amountMinor],
@@ -137,11 +203,29 @@ export async function closeRun(db, { runId, actorId = null } = {}) {
       allocations.push({ orderNumber: drop.order_number, amountMinor });
     }
 
+    // The failed attempts' share is real money that no order can carry. It is
+    // posted to 5010 against the run — not against an order — so the per-order
+    // margins stay honest and the cost stays visible.
+    const unattributedMinor = shares.slice(drops).reduce((a, v) => a + v, 0);
+    if (unattributedMinor > 0) {
+      await post(tx, {
+        kind: 'last_mile_unattributed',
+        refType: 'last_mile_run',
+        refId: run.id,
+        memo: `failed attempts on ${run.run_date}`,
+        entries: [
+          { accountCode: ACCOUNTS.LAST_MILE, debit: unattributedMinor },
+          { accountCode: ACCOUNTS.RIDER_PAYABLE, credit: unattributedMinor },
+        ],
+      });
+    }
+
     await tx.query(
       `update last_mile_runs
-          set status = 'closed', drops = $2, cost_minor = $3, closed_at = now(), closed_by = $4
+          set status = 'closed', drops = $2, attempts = $3, failed_drops = $4,
+              cost_minor = $5, unattributed_minor = $6, closed_at = now(), closed_by = $7
         where id = $1`,
-      [run.id, drops, totalMinor, actorId],
+      [run.id, drops, attempts, failedAttempts, totalMinor, unattributedMinor, actorId],
     );
 
     return {
@@ -149,9 +233,13 @@ export async function closeRun(db, { runId, actorId = null } = {}) {
       runDate: run.run_date,
       status: 'closed',
       drops,
+      attempts,
+      failedDrops: failedAttempts,
       totalMinor,
       perDropMinor: shares[0],
-      allocatedMinor: shares.reduce((a, v) => a + v, 0),
+      perAttemptMinor: shares[0],
+      allocatedMinor,
+      unattributedMinor,
       allocations,
     };
   });
@@ -174,7 +262,8 @@ export async function lastMileReport(db, { from = null, to = null } = {}) {
   }
 
   const runsRes = await db.query(
-    `select r.id, r.run_date, r.status, r.drops, r.cost_minor, r.rider_pay_minor, r.fuel_minor,
+    `select r.id, r.run_date, r.status, r.planned_drops, r.drops, r.attempts, r.failed_drops, r.cost_minor,
+            r.unattributed_minor, r.rider_pay_minor, r.fuel_minor,
             rt.name as route_name, u.full_name as rider_name
        from last_mile_runs r
        left join routes rt on rt.id = r.route_id
@@ -189,10 +278,14 @@ export async function lastMileReport(db, { from = null, to = null } = {}) {
     runId: r.id,
     runDate: r.run_date,
     status: r.status,
+    plannedDrops: r.planned_drops === null ? null : Number(r.planned_drops),
     routeName: r.route_name,
     riderName: r.rider_name,
     drops: Number(r.drops),
+    attempts: Number(r.attempts),
+    failedDrops: Number(r.failed_drops),
     costMinor: num(r.cost_minor),
+    unattributedMinor: num(r.unattributed_minor),
     riderPayMinor: num(r.rider_pay_minor),
     fuelMinor: num(r.fuel_minor),
     perDropMinor: Number(r.drops) > 0 ? Math.floor(num(r.cost_minor) / Number(r.drops)) : null,
@@ -201,6 +294,8 @@ export async function lastMileReport(db, { from = null, to = null } = {}) {
   const closed = runs.filter((r) => r.status === 'closed');
   const costMinor = closed.reduce((a, r) => a + r.costMinor, 0);
   const drops = closed.reduce((a, r) => a + r.drops, 0);
+  const attempts = closed.reduce((a, r) => a + r.attempts, 0);
+  const unattributedMinor = closed.reduce((a, r) => a + r.unattributedMinor, 0);
 
   const uncostedRes = await db.query(
     `select o.order_number, coalesce(d.delivered_at::date, d.scheduled_date) as run_date
@@ -222,8 +317,14 @@ export async function lastMileReport(db, { from = null, to = null } = {}) {
       openRuns: runs.filter((r) => r.status === 'open').length,
       closedRuns: closed.length,
       drops,
+      attempts,
+      failedDrops: closed.reduce((a, r) => a + r.failedDrops, 0),
       costMinor,
-      perDropMinor: drops > 0 ? Math.floor(costMinor / drops) : null,
+      // What each delivered parcel carries, and what the trip cost per door it
+      // actually knocked on. The difference is failed attempts.
+      perDropMinor: drops > 0 ? Math.floor((costMinor - unattributedMinor) / drops) : null,
+      perAttemptMinor: attempts > 0 ? Math.floor(costMinor / attempts) : null,
+      unattributedMinor,
       // The question the whole increment exists to answer.
       deliveryRevenueMinor,
       lastMileCostMinor: postedLastMileMinor,

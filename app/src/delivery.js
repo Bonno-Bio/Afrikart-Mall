@@ -51,7 +51,10 @@ export async function recordDelivery(db, { orderNumber, cashCollectedMinor = nul
     await tx.query(
       `update deliveries
           set status = 'delivered', delivered_at = now(), cash_collected_minor = $2,
-              attempt_count = greatest(attempt_count, 1),
+              -- This delivery is one more attempt than whatever came before it.
+              -- A parcel that failed once and arrived on the second try must be
+              -- countable as a second attempt, or first-attempt success is a lie.
+              attempt_count = attempt_count + 1,
               rider_id = coalesce(rider_id, $3)
         where order_id = $1 and status <> 'delivered'`,
       [order.id, cash, riderId],
@@ -175,6 +178,72 @@ export async function recordDelivery(db, { orderNumber, cashCollectedMinor = nul
       // beside it rather than subtracted from our margin.
       grossMarginMinor: cogs.unresolved.length === 0 ? keptMinor - cogs.cogsMinor : null,
       alreadyDelivered: false,
+    };
+  });
+}
+
+/**
+ * A drop that did not happen. It is not a sale, so nothing is recognised; it is
+ * a trip, so the fuel is already spent. Recording it here is what lets the run
+ * report charge the cost to the business instead of to a customer who never
+ * received a parcel.
+ *
+ * Repeatable on purpose: three attempts at one address are three attempts, and a
+ * delivery record that only remembers the last one cannot explain why a route
+ * took five hours.
+ */
+export async function recordFailedAttempt(db, { orderNumber, reasonCode, note = null, riderId = null }) {
+  if (!reasonCode) {
+    throw new AppError(422, 'REASON_REQUIRED', 'A failed attempt needs a reason code.', { field: 'reasonCode' });
+  }
+  return db.transaction(async (tx) => {
+    const res = await tx.query(
+      `select d.id, d.status, d.attempt_count, o.id as order_id, o.order_number, o.status as order_status
+         from deliveries d join orders o on o.id = d.order_id
+        where o.order_number = $1
+        for update of d`,
+      [orderNumber],
+    );
+    const delivery = res.rows[0];
+    if (!delivery) throw new AppError(404, 'ORDER_NOT_FOUND', 'That order does not exist.');
+    if (delivery.status === 'delivered') {
+      throw new AppError(409, 'ALREADY_DELIVERED', 'That order has already been delivered.');
+    }
+    if (['cancelled', 'refunded'].includes(delivery.order_status)) {
+      throw new AppError(409, 'ORDER_CLOSED', `An order in "${delivery.order_status}" cannot be attempted.`);
+    }
+
+    const reason = await tx.query(`select code, category from delivery_failure_reasons where code = $1`, [reasonCode]);
+    if (reason.rows.length === 0) {
+      throw new AppError(422, 'UNKNOWN_REASON', `"${reasonCode}" is not a known failure reason.`, {
+        field: 'reasonCode',
+      });
+    }
+
+    const attempts = Number(delivery.attempt_count) + 1;
+    await tx.query(
+      `update deliveries
+          set status = 'failed', attempt_count = $2, failure_reason_code = $3, failure_note = $4,
+              first_attempt_at = coalesce(first_attempt_at, now()),
+              rider_id = coalesce(rider_id, $5)
+        where id = $1`,
+      [delivery.id, attempts, reasonCode, note, riderId],
+    );
+
+    await tx.query(
+      `insert into order_events (order_id, event, detail, actor_type)
+       values ($1, 'delivery_failed', $2, 'rider')`,
+      [delivery.order_id, `${reasonCode}${note ? `: ${note}` : ''}`],
+    );
+
+    return {
+      orderNumber: delivery.order_number,
+      status: 'failed',
+      reasonCode,
+      category: reason.rows[0].category,
+      attempts,
+      // A failed attempt is rescheduled, not abandoned: the parcel goes back out.
+      needsReschedule: true,
     };
   });
 }

@@ -976,11 +976,22 @@ create table last_mile_runs (
   route_id        uuid references routes(id),
   rider_id        uuid references riders(id),
   run_date        date not null,
+  -- What dispatch expected this run to carry, captured when it was opened. A
+  -- plan compared against a plan recomputed at midnight is not a plan.
+  planned_drops   integer check (planned_drops >= 0),
   rider_pay_minor bigint not null default 0 check (rider_pay_minor >= 0),
   fuel_minor      bigint not null default 0 check (fuel_minor >= 0),
   status          text not null default 'open' check (status in ('open','closed')),
+  -- Delivered drops, and every drop attempted (delivered + failed). A failed
+  -- attempt burns the same fuel as a successful one, so it is in the divisor;
+  -- it just cannot be charged to a customer who did not receive anything.
   drops           integer not null default 0 check (drops >= 0),
+  attempts        integer not null default 0 check (attempts >= 0),
+  failed_drops    integer not null default 0 check (failed_drops >= 0),
   cost_minor      bigint not null default 0 check (cost_minor >= 0),
+  -- The share of the trip that no order can carry: failed attempts and idle
+  -- capacity. Kept as its own number so it never hides inside a per-drop figure.
+  unattributed_minor bigint not null default 0 check (unattributed_minor >= 0),
   note            text,
   opened_at       timestamptz not null default now(),
   closed_at       timestamptz,

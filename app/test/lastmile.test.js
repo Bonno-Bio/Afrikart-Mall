@@ -188,7 +188,7 @@ test('the report answers whether the delivery fee pays for the drop', async () =
   assert.equal(report.totals.deliveryMarginMinor, 2632 - 37000);
   assert.equal(report.totals.feeCoversDrop, false, 'P26.32 of fee does not pay for an P185 drop');
   assert.equal(report.runs[0].riderName, 'Dineo Mothusi');
-  assert.equal(report.runs[0].routeName, null);
+  assert.equal(report.runs[0].routeName, 'Gaborone West 1', 'a rider-only run belongs to the route that rider carried');
 });
 
 test('a payment fee is a cost of the order, not of the act of capturing', async () => {

@@ -13,7 +13,7 @@ npm install
 npm run migrate          # db/schema.sql → the database
 npm run seed:demo        # one seller, three SKUs, one route, three addresses
 npm start                # API on 0.0.0.0:4000
-npm test                 # 164 tests against real PostgreSQL 16
+npm test                 # 174 tests against real PostgreSQL 16
 ```
 
 ## What it runs on
@@ -74,6 +74,8 @@ npm test                 # 164 tests against real PostgreSQL 16
 | GET | `/api/ops/last-mile` | runs, cost per drop, and whether the delivery fee pays for the drop |
 | GET | `/api/ops/dispatch` | is this route worth sending? cost per drop, break-even drops, `go` / `thin` / `hold` |
 | GET | `/api/ops/dispatch/rates` | the run rate card, per vehicle class |
+| GET | `/api/ops/dispatch/day-close` | plan vs the day: drops, attempts, costed, unattributed, `closed` |
+| POST | `/api/ops/orders/{number}/failed-attempt` | record a door that burned fuel and delivered nothing |
 | GET | `/api/ops/last-mile/payable` | what is owed to each rider for costed runs |
 | POST | `/api/ops/last-mile/runs` | open a run: rider, route, date, rider pay, fuel |
 | POST | `/api/ops/last-mile/runs/:id/close` | divide the trip across its drops; posts Dr 5010 / Cr 2040 once |
@@ -205,6 +207,31 @@ orders count as drops without fees, so they push the break-even the wrong way.
 That is the honest shape of the delivery-fee question: it is a fill-rate problem,
 not a price-per-parcel problem.
 
+## The gate nobody answered still costs P92.50
+
+`GET /api/ops/dispatch/day-close?date=…` is the evening's answer to the morning's
+plan. A failed attempt — no answer, wrong address, refused — is recorded with
+`POST /api/ops/orders/{number}/failed-attempt` and counted as an **attempt**, so
+the trip is divided by every door it cost, not only the ones that opened:
+
+```
+P370 trip ÷ 4 doors = P92.50 a door
+3 households carry P27.75 each  ·  P9.25 to `5010 unattributed`, against the run
+```
+
+The failed share is never smeared onto the customers who did receive something,
+and it is never lost: `Dr 5010 / Cr 2040` once, tagged to the run. `closed` is a
+fact — something happened, every run is shut, nothing is on the road, nothing was
+delivered uncosted, no discrepancy is open. An empty route is **empty**, not
+closed.
+
+`planned_drops` is captured when the run is opened, so day close compares the day
+to what dispatch actually said (`plannedSource: run_at_open`) instead of a plan
+recomputed at midnight. A drop belongs to the day it happened —
+`coalesce(delivered_at, first_attempt_at, scheduled_date)` — so a plan shrinks as
+the work is done, and `firstAttemptSuccessBps` counts deliveries that needed no
+second trip, not parcels that eventually arrived.
+
 ## Counting a shelf takes hours
 
 A stocktake is a **session** (`ST-2026-0001`), not one HTTP payload: opened, counted
@@ -257,7 +284,7 @@ src/
   refunds.js        two channels, exact reversal, restock rules
   invoice.js        immutable VAT invoice
   server.js         the API
-test/               164 tests: money, ledger, orders, payments, refunds, shelf, payouts, auth, sms, import, stocktake, shrinkage, packaging, profitability, last mile, dispatch, HTTP
+test/               174 tests: money, ledger, orders, payments, refunds, shelf, payouts, auth, sms, import, stocktake, shrinkage, packaging, profitability, last mile, dispatch, day close, HTTP
 ```
 
 ## The two bugs this harness found on day one
