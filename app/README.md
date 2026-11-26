@@ -13,7 +13,7 @@ npm install
 npm run migrate          # db/schema.sql → the database
 npm run seed:demo        # one seller, three SKUs, one route, three addresses
 npm start                # API on 0.0.0.0:4000
-npm test                 # 154 tests against real PostgreSQL 16
+npm test                 # 164 tests against real PostgreSQL 16
 ```
 
 ## What it runs on
@@ -72,6 +72,8 @@ npm test                 # 154 tests against real PostgreSQL 16
 | GET | `/api/ops/packaging` | per-order packaging cost vs fulfilment fee; names orders where the box costs more |
 | GET | `/api/ops/profitability` | every order's P&L read off the ledger: fees, goods, box, refunds, tie-out |
 | GET | `/api/ops/last-mile` | runs, cost per drop, and whether the delivery fee pays for the drop |
+| GET | `/api/ops/dispatch` | is this route worth sending? cost per drop, break-even drops, `go` / `thin` / `hold` |
+| GET | `/api/ops/dispatch/rates` | the run rate card, per vehicle class |
 | GET | `/api/ops/last-mile/payable` | what is owed to each rider for costed runs |
 | POST | `/api/ops/last-mile/runs` | open a run: rider, route, date, rider pay, fuel |
 | POST | `/api/ops/last-mile/runs/:id/close` | divide the trip across its drops; posts Dr 5010 / Cr 2040 once |
@@ -188,6 +190,21 @@ orders still carrying no cost, so the gap stays visible while it is being closed
 Payment provider fees are now posted against the order (`Dr 5020 / Cr 1020`), not
 against the payment, so they reach the per-order margin too.
 
+## Fifteen drops, or don't send the scooter
+
+`GET /api/ops/dispatch?date=…` prices every route that has work scheduled,
+before it leaves the yard: the trip's cost (rate card, or the actual cost of a run
+already opened), the delivery fees it will collect, cost per drop, cost per drop
+at capacity, and the number of **paying drops** needed to break even.
+
+On the seeded scooter route — P250 rider pay plus P120 fuel — break-even is
+**15 paying drops out of 22**. At fifteen the trip earns P24.74; at three it loses
+P291.05. Capacity is a hard stop regardless of the money (`hold`), and free-delivery
+orders count as drops without fees, so they push the break-even the wrong way.
+
+That is the honest shape of the delivery-fee question: it is a fill-rate problem,
+not a price-per-parcel problem.
+
 ## Counting a shelf takes hours
 
 A stocktake is a **session** (`ST-2026-0001`), not one HTTP payload: opened, counted
@@ -240,7 +257,7 @@ src/
   refunds.js        two channels, exact reversal, restock rules
   invoice.js        immutable VAT invoice
   server.js         the API
-test/               154 tests: money, ledger, orders, payments, refunds, shelf, payouts, auth, sms, import, stocktake, shrinkage, packaging, profitability, last mile, HTTP
+test/               164 tests: money, ledger, orders, payments, refunds, shelf, payouts, auth, sms, import, stocktake, shrinkage, packaging, profitability, last mile, dispatch, HTTP
 ```
 
 ## The two bugs this harness found on day one

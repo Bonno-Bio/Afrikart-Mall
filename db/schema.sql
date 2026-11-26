@@ -1001,6 +1001,21 @@ create table last_mile_allocations (
 );
 create index on last_mile_allocations (run_id);
 
+-- What a run costs before anyone knows what it will carry. Per vehicle class,
+-- because a scooter and a bakkie are not paid the same and do not burn the same
+-- fuel. The dispatch plan uses this to price a trip before it happens; a closed
+-- run records what it actually cost.
+create table run_rate_card (
+  vehicle_class   text primary key check (vehicle_class in ('scooter','car','bakkie','van')),
+  rider_pay_minor bigint not null check (rider_pay_minor >= 0),
+  fuel_minor      bigint not null check (fuel_minor >= 0)
+);
+insert into run_rate_card (vehicle_class, rider_pay_minor, fuel_minor) values
+  ('scooter', 25000, 12000),
+  ('car',     32000, 18000),
+  ('bakkie',  38000, 26000),
+  ('van',     45000, 32000);
+
 -- What is already promised to a route on a given day, in drops, grams and millilitres.
 create or replace view route_load as
 select

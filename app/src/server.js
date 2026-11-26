@@ -30,6 +30,7 @@ import { decideStocktakeIncidents, openStocktakeIncidents } from './shrinkage.js
 import { buyPackaging, packAnOrder, packagingQuote, packagingReport } from './packaging.js';
 import { orderMargins, marginBySeller } from './profitability.js';
 import { openRun, closeRun, lastMileReport, riderPayable, recordPspFee } from './lastmile.js';
+import { dispatchPlan, rateCard } from './dispatch.js';
 import { requestOtp, verifyOtp, userFromToken, revokeSession, listSessions } from './auth.js';
 import { createSmsSender, productionReadiness } from './sms.js';
 
@@ -502,6 +503,26 @@ export function createApp({
     try {
       requireAdmin(req);
       res.json(await lastMileReport(db, { from: req.query.from ?? null, to: req.query.to ?? null }));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // Should this route go out today? The trip priced against the fees it collects.
+  app.get('/api/ops/dispatch', async (req, res, next) => {
+    try {
+      requireAdmin(req);
+      const runDate = req.query.date ?? new Date().toISOString().slice(0, 10);
+      res.json(await dispatchPlan(db, { runDate, routeId: req.query.routeId ?? null }));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  app.get('/api/ops/dispatch/rates', async (req, res, next) => {
+    try {
+      requireAdmin(req);
+      res.json({ rates: await rateCard(db), currency: 'BWP' });
     } catch (err) {
       next(err);
     }
