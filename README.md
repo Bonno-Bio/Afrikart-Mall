@@ -1,1 +1,105 @@
-# Afrikart-Mall
+# Afrikart Mall
+
+Botswana-born commerce platform. This repository holds the **decision record** and a **working
+platform slice** — strategy, models, specifications, and the Amazon-shaped marketplace itself.
+
+## The two things in here
+
+| | |
+|---|---|
+| **The business** | `docs/` — decision memos. Read `000` before anything else. It argues the business model, the launch category, the unit economics and the kill criteria. |
+| **The platform** | `product/` — a working marketplace: storefront, search, product pages, cart, checkout, order tracking, Seller Central and platform admin. |
+
+The software is deliberately broad (Amazon-shaped, all seven pillars modelled). The **business is
+deliberately narrow** — one category, one city, one delivery model, until the unit economics prove
+out. Those two decisions are not in conflict; memo 000 explains why.
+
+## Start here
+
+```bash
+cd product
+npm install
+npm run build && npm start        # http://localhost:3000
+```
+
+Demo accounts (password `demo1234`):
+
+- `customer@afrikart.co.bw` — shopper with order history
+- `seller@afrikart.co.bw` — Seller Central for Naledi Beauty Supply
+- `rider@afrikart.co.bw` — today's delivery route: stops, POD, failure reason codes, cash reconciliation
+- `admin@afrikart.co.bw` — platform operations
+
+## Read in this order
+
+1. `docs/000-founding-decisions.md` — the business case, the four structural decisions, the 90-day pilot, the kill criteria
+2. `docs/002-master-framework.md` — **the operating system (v1.3)**: constitution, strategy bets, metric tree, density curve, four quarterly fights, cadence, capital, people, risk
+3. `docs/001-platform-architecture.md` — what was built, the domain model, and the path to production
+4. `docs/003-production-stack.md` — the production stack decision: WordPress vs React, and why the answer is neither
+5. `docs/004-build-readiness.md` — **what is still missing before the build starts**, and who owns it
+6. `docs/005-build-phases.md` — **the execution spine (v2.0, remapped): Route One in eight weeks, ≈P270k**, then the full phase catalogue behind the gates
+7. `docs/006-amazon-gap-analysis.md` — **the twelve ways our own framework caps us** (strategy), applied in `002` v1.2
+8. `docs/007-hinderings-last-run.md` — **the twelve things that stop us operating like Amazon** (addresses, vehicle capacity, supply chain, licences, mobile money) and the fixes
+9. `docs/spec/` — the build pack: 53-story backlog, the API contract, and **`delivery.md`** (the logistics spec)
+10. `docs/hiring/` — the build brief to send contractors, and the PSP question sheet
+11. `docs/registers/` — the living truth: decisions, assumptions, risks
+12. `model/afrikart-unit-economics.xlsx` — the **v2** model: density curve, 12-month ramp, cash cycle, and what an engineer costs
+
+## Two applications, on purpose
+
+| | `app/` | `product/` |
+|---|---|---|
+| What it is | **The real platform.** API + database + money core | The clickable prototype: React, mock data, no real money |
+| Runs on | PostgreSQL 16 (or PGlite, the same engine in WebAssembly, for dev and tests) | Express + a JSON file |
+| Proves | The order is atomic, the ledger balances, the promise is honest | What the screens feel like |
+| Start here | `app/README.md` | `product/` — demo accounts in the section above |
+
+`app/` is where the build lives. `product/` stays because it is the fastest way to show somebody
+what the thing is before they read a single document.
+
+`db/schema.sql` is the production data model — money in integer thebe, a double-entry append-only
+ledger that balances by constraint, inventory derived from movements, and a `route_weekly_pnl` view
+that answers whether the business actually works.
+
+Two kinds of document here, deliberately kept apart: the **framework** is stable and changes by
+version; the **registers** change weekly. If they disagree, the register is right and the framework
+needs a new version.
+
+## The five documents that run the company
+
+| Document | Answers | Changes |
+|---|---|---|
+| `docs/002-master-framework.md` | How we decide and operate | By version, rarely |
+| `docs/registers/decisions.md` | Why we chose this, and when we would reverse it | Weekly |
+| `docs/registers/assumptions.md` | What we believe, and the test that settles it | Weekly |
+| `docs/registers/risks.md` | What could kill us, and the trigger to watch | Monthly |
+| `docs/templates/` | The weekly and monthly rituals | Annually |
+
+## Layout
+
+| Path | What it is |
+|---|---|
+| `docs/` | Decision memos and the master framework. Read the highest number last. |
+| `docs/registers/` | Living registers — decisions, assumptions, risks. |
+| `docs/templates/` | Meeting templates that the cadence runs on. |
+| `product/` | The application — React + Vite front end, Express API. |
+| `db/` | Production database schema. Stack-independent — correct for any framework. |
+| `docs/spec/` | Backlog, API contract, and the delivery specification — what a builder needs on day one. |
+| `docs/hiring/` | Build brief and payment-provider question sheet. |
+| `model/` | Financial models. `afrikart-unit-economics.xlsx` is the live one. |
+| `scripts/` | Generators, so models stay reproducible and reviewable in git. |
+
+## Decisions
+
+| # | Decision | Status |
+|---|---|---|
+| 001 | Business model — C′ "Owned Marketplace" | **Proposed** |
+| 002 | Capital approach — Lean, 90-day funded pilot | **Proposed** |
+| 003 | Launch ambition — Gaborone first, national via rented carriers | **Proposed** |
+| 004 | Launch category | **Open** |
+
+## Rebuilding the financial model
+
+```bash
+python3 -m venv .venv && .venv/bin/pip install openpyxl
+.venv/bin/python scripts/build_model.py
+```

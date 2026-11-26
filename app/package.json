@@ -1,0 +1,21 @@
+{
+  "name": "@afrikart/platform",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Afrikart Mall — production application. B1: The Till.",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "migrate": "node db/migrate.js",
+    "start": "node src/server.js",
+    "test": "node --test --test-concurrency=1 test/*.test.js",
+    "seed:demo": "node db/seed-demo.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.2.17"
+  }
+}
