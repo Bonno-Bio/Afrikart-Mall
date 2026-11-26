@@ -13,7 +13,7 @@ npm install
 npm run migrate          # db/schema.sql → the database
 npm run seed:demo        # one seller, three SKUs, one route, three addresses
 npm start                # API on 0.0.0.0:4000
-npm test                 # 81 tests against real PostgreSQL 16
+npm test                 # 89 tests against real PostgreSQL 16
 ```
 
 ## What it runs on
@@ -97,8 +97,20 @@ Every route that touches money or stock takes `Authorization: Bearer <token>` fr
 `x-user-id` header still exists for local development and only when
 `ALLOW_DEV_AUTH=1`; it is off by default and refused in production.
 
-**No SMS gateway is integrated.** Codes are generated and hashed; nothing sends
-them. That is the one thing standing between this login and a real user.
+**SMS delivery is wired but no vendor is chosen.** `app/src/sms.js` posts to a
+configurable HTTP gateway (`SMS_PROVIDER=http`, `SMS_API_URL`, `SMS_API_KEY`,
+`SMS_SENDER_ID`) and refuses to claim success when a gateway rejects or cannot be
+reached — a failed send destroys the code and returns an error, rather than
+leaving a customer waiting by a silent phone. In production the process will not
+start at all without a gateway, a PSP webhook secret, and a real `DATABASE_URL`:
+
+```
+$ NODE_ENV=production node src/server.js
+refusing to start in production:
+  - SMS gateway is not configured: phone logins cannot be delivered.
+  - PSP_WEBHOOK_SECRET is not set: unsigned payment webhooks would be trusted.
+  - DATABASE_URL is not set: the process would run on an in-memory database.
+```
 
 ## What B1 does not do
 
@@ -133,7 +145,7 @@ src/
   refunds.js        two channels, exact reversal, restock rules
   invoice.js        immutable VAT invoice
   server.js         the API
-test/               81 tests: money, ledger, orders, payments, refunds, shelf, payouts, auth, HTTP
+test/               89 tests: money, ledger, orders, payments, refunds, shelf, payouts, auth, sms, HTTP
 ```
 
 ## The two bugs this harness found on day one

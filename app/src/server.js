@@ -25,6 +25,7 @@ import {
 } from './catalogue.js';
 import { payoutRun, payoutStatement, payoutsFor } from './payouts.js';
 import { requestOtp, verifyOtp, userFromToken, revokeSession, listSessions } from './auth.js';
+import { createSmsSender, productionReadiness } from './sms.js';
 
 export function verifyWebhookSignature(rawBody, signature, secret) {
   if (!secret) return false;
@@ -43,6 +44,9 @@ export function createApp({
   // Separate switch: a test suite needs the code back without turning the
   // header shortcut on. Both are off in production.
   exposeOtpCodes = devAuth,
+  // A sender is injected so the suite never dials a real gateway, and so a
+  // deployment chooses one in exactly one place.
+  sms = createSmsSender(),
 } = {}) {
   const app = express();
   app.disable('x-powered-by');
@@ -114,13 +118,20 @@ export function createApp({
   app.post('/api/auth/otp', async (req, res, next) => {
     try {
       const { phone, purpose } = req.body ?? {};
+      const exposeCode = exposeOtpCodes && process.env.NODE_ENV !== 'production';
+
+      // Without a gateway and without a dev exposure there is no way to receive
+      // the code, so refuse rather than accept a login that cannot complete.
+      if (!sms.configured && !exposeCode) {
+        throw new AppError(503, 'SMS_UNCONFIGURED', 'Login is not available right now: no SMS gateway is configured.');
+      }
+
       const result = await requestOtp(db, {
         phone,
         purpose: purpose ?? 'login',
         ip: req.ip ?? null,
-        // Never in production: a code that travels over HTTP authenticates
-        // whoever can read the response, which is everybody.
-        exposeCode: exposeOtpCodes && process.env.NODE_ENV !== 'production',
+        sender: sms.configured ? sms : null,
+        exposeCode,
       });
       res.status(201).json(result);
     } catch (err) {
@@ -443,6 +454,15 @@ if (isDirectRun) {
     const { seed } = await import('../db/seed.js');
     const existing = await db.query('select count(*)::int as n from users');
     if (Number(existing.rows[0].n) === 0) await seed(db);
+  }
+
+  // Refuse to serve customers from a process that cannot deliver a login code,
+  // or that would trust an identity header. Loud at boot beats quiet in support.
+  const problems = productionReadiness();
+  if (problems.length > 0) {
+    console.error('refusing to start in production:');
+    for (const problem of problems) console.error(`  - ${problem}`);
+    process.exit(1);
   }
 
   const port = Number(process.env.PORT ?? 4000);

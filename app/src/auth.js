@@ -19,6 +19,7 @@
  */
 import crypto from 'node:crypto';
 import { AppError } from './errors.js';
+import { otpMessage } from './sms.js';
 
 const CODE_TTL_SECONDS = 300;
 const SESSION_TTL_DAYS = 30;
@@ -55,7 +56,10 @@ const sixDigits = () => String(crypto.randomInt(0, 1_000_000)).padStart(6, '0');
  * leaves by SMS and never by HTTP. An endpoint that returns its own OTP is an
  * endpoint that authenticates nobody.
  */
-export async function requestOtp(db, { phone, purpose = 'login', ip = null, exposeCode = false } = {}) {
+export async function requestOtp(
+  db,
+  { phone, purpose = 'login', ip = null, exposeCode = false, sender = null } = {},
+) {
   const normalised = normalisePhone(phone);
 
   const recent = await db.query(
@@ -85,13 +89,27 @@ export async function requestOtp(db, { phone, purpose = 'login', ip = null, expo
     [normalised, hashCode(normalised, code), purpose, MAX_ATTEMPTS, CODE_TTL_SECONDS, ip],
   );
 
-  return {
+  const challenge = {
     challengeId: res.rows[0].id,
     phone: normalised,
     expiresAt: res.rows[0].expires_at,
     expiresInSeconds: CODE_TTL_SECONDS,
-    ...(exposeCode ? { devCode: code } : {}),
   };
+
+  // Delivery is not optional in production. If the message cannot be handed to
+  // a gateway, the code is destroyed and the caller is told: "sent" is a claim,
+  // and an unsent code that looks sent is how a login fails silently.
+  if (sender) {
+    try {
+      const delivery = await sender.send(normalised, otpMessage(code));
+      return { ...challenge, delivered: true, provider: delivery.provider, ...(exposeCode ? { devCode: code } : {}) };
+    } catch (err) {
+      await db.query(`update otp_challenges set consumed_at = now() where id = $1`, [challenge.challengeId]);
+      throw err;
+    }
+  }
+
+  return { ...challenge, delivered: false, ...(exposeCode ? { devCode: code } : {}) };
 }
 
 /**
