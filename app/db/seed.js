@@ -166,6 +166,52 @@ export async function seed(db) {
     ]);
   }
 
+  // Packaging, bought once for the pilot and counted from then on. The recipe is
+  // pilot packing practice: what actually goes into a parcel of each class.
+  await db.query(
+    `insert into packaging_materials (code, name, kind, unit_cost_minor, on_hand) values
+       ('MAILER-S','Poly mailer, small','mailer',120,200),
+       ('BOX-M','Carton, medium','box',450,120),
+       ('FILLER-PK','Void fill, per parcel','filler',110,150),
+       ('WRAP-BB','Bubble wrap sheet','wrap',240,100),
+       ('LABEL-A4','Waybill label','label',35,2000),
+       ('BAG-COLD','Insulated bag','cold',1800,20),
+       ('GEL-ICE','Gel ice pack','cold',600,40)`,
+  );
+
+  await db.query(
+    `insert into packaging_recipe (parcel_class, material_code, quantity) values
+       ('small','MAILER-S',1), ('small','LABEL-A4',1),
+       ('bulky','BOX-M',1), ('bulky','FILLER-PK',1), ('bulky','LABEL-A4',1),
+       ('fragile','BOX-M',1), ('fragile','WRAP-BB',1), ('fragile','LABEL-A4',1),
+       ('cold','BAG-COLD',1), ('cold','GEL-ICE',1), ('cold','LABEL-A4',1)`,
+  );
+
+  // The opening buy is a real purchase: stock in, cash out. P2,485 of cardboard
+  // and labels, which is the most unglamorous line in the business and the one
+  // that decides whether a 4% fulfilment fee is a margin.
+  const openingPackaging = 200 * 120 + 120 * 450 + 150 * 110 + 100 * 240 + 2000 * 35 + 20 * 1800 + 40 * 600;
+  await db.query(
+    `insert into packaging_purchases (material_code, quantity, unit_cost_minor, total_minor, note)
+     values ('MAILER-S', 200, 120, 24000, 'opening packaging buy'),
+            ('BOX-M', 120, 450, 54000, 'opening packaging buy'),
+            ('FILLER-PK', 150, 110, 16500, 'opening packaging buy'),
+            ('WRAP-BB', 100, 240, 24000, 'opening packaging buy'),
+            ('LABEL-A4', 2000, 35, 70000, 'opening packaging buy'),
+            ('BAG-COLD', 20, 1800, 36000, 'opening packaging buy'),
+            ('GEL-ICE', 40, 600, 24000, 'opening packaging buy')`,
+  );
+  await db.transaction(async (tx) =>
+    post(tx, {
+      kind: 'packaging_purchase',
+      memo: 'opening packaging buy',
+      entries: [
+        { accountCode: ACCOUNTS.PACKAGING_STOCK, debit: openingPackaging },
+        { accountCode: ACCOUNTS.BANK, credit: openingPackaging },
+      ],
+    }),
+  );
+
   await db.query(
     `insert into routes (id, name, city, suburbs, daily_capacity, vehicle_class, max_weight_grams, max_volume_ml)
      values ($1, 'Gaborone West 1', 'Gaborone', array['Extension 12','Broadhurst'], 22, 'scooter', 40000, 80000)`,

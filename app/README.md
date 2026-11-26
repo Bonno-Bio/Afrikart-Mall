@@ -13,7 +13,7 @@ npm install
 npm run migrate          # db/schema.sql → the database
 npm run seed:demo        # one seller, three SKUs, one route, three addresses
 npm start                # API on 0.0.0.0:4000
-npm test                 # 122 tests against real PostgreSQL 16
+npm test                 # 130 tests against real PostgreSQL 16
 ```
 
 ## What it runs on
@@ -69,6 +69,10 @@ npm test                 # 122 tests against real PostgreSQL 16
 | POST | `/api/ops/purchase-orders/{number}/receive` | stock + movements + ledger in one transaction |
 | POST | `/api/ops/catalogue/import` | CSV import as drafts; all-or-nothing, line-numbered errors, `dryRun` |
 | POST | `/api/ops/stocktake` | counts in, variances recorded, consignment shortfalls raised as incidents |
+| GET | `/api/ops/packaging` | per-order packaging cost vs fulfilment fee; names orders where the box costs more |
+| GET | `/api/ops/packaging/quote` | what a parcel of a given class costs, from the recipe |
+| POST | `/api/ops/packaging/purchase` | buy materials into stock (Dr 1110 / Cr Bank) |
+| POST | `/api/ops/orders/:number/pack` | consume packaging for an order, once |
 | POST | `/api/ops/stocktake/sessions` | open a count; returns `ST-YYYY-NNNN` |
 | GET | `/api/ops/stocktake/sessions/:id` | the count sheet in bin-walk order, with progress |
 | POST | `/api/ops/stocktake/sessions/:id/counts` | count lines; call again to resume, repeat a SKU to recount |
@@ -119,6 +123,20 @@ refusing to start in production:
   - PSP_WEBHOOK_SECRET is not set: unsigned payment webhooks would be trusted.
   - DATABASE_URL is not set: the process would run on an in-memory database.
 ```
+
+## The box was missing from the margin
+
+Account **5030 Packaging** existed from the first chart of accounts and nothing
+ever posted to it — so every fulfilment margin was calculated with the box left
+out. Packaging is now bought into stock (1110), consumed per parcel
+(Dr 5030 / Cr 1110), and recorded against the order. A shortfall is
+Cr 2030 Packaging accrual, never negative stock.
+
+The number that matters: a single bulky parcel of nappies earns **P7.54** of
+fulfilment fee and costs **P5.95** in carton, filler and a label — P1.59 left
+before the rider moves. A cold-chain parcel costs **P24.35** and is underwater on
+one unit. `GET /api/ops/packaging` names every order where the fee did not buy the
+box rather than averaging it away.
 
 ## Counting a shelf takes hours
 
@@ -172,7 +190,7 @@ src/
   refunds.js        two channels, exact reversal, restock rules
   invoice.js        immutable VAT invoice
   server.js         the API
-test/               122 tests: money, ledger, orders, payments, refunds, shelf, payouts, auth, sms, import, stocktake, shrinkage, HTTP
+test/               130 tests: money, ledger, orders, payments, refunds, shelf, payouts, auth, sms, import, stocktake, shrinkage, packaging, HTTP
 ```
 
 ## The two bugs this harness found on day one

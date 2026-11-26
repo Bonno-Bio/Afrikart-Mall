@@ -621,9 +621,13 @@ insert into chart_of_accounts (code, name, type) values
   ('1010','Bank','asset'),
   ('1020','PSP receivable','asset'),
   ('1100','Inventory','asset'),
+  ('1110','Packaging stock','asset'),
   ('2000','Customer prepayments','liability'),
   ('2010','Seller payable','liability'),
   ('2020','VAT payable','liability'),
+  -- Packaging used before it was reordered: a real debt to a real supplier, not
+  -- a negative stock figure pretending the box was free.
+  ('2030','Packaging accrual','liability'),
   ('3000','Retained earnings','equity'),
   ('4000','Commission revenue','revenue'),
   ('4010','Fulfilment revenue','revenue'),
@@ -786,6 +790,57 @@ create table stocktake_entries (
   recount_by       uuid references users(id),
   recount_at       timestamptz,
   unique (session_id, variant_id)
+);
+
+-- PACKAGING: a box is a cost per parcel, and the fulfilment fee has to cover it
+--
+-- 5030 existed from the first chart of accounts and nothing ever posted to it,
+-- which meant every "fulfilment margin" in this system was a margin with the box
+-- left out. Packaging is bought in bulk (Dr 1110 / Cr Bank), consumed per parcel
+-- (Dr 5030 / Cr 1110), and — when we run out and pack anyway, because the
+-- customer is at the door — the shortfall is a liability (Cr 2030) rather than
+-- negative stock.
+create table packaging_materials (
+  code            text primary key,               -- 'BOX-M', 'MAILER-S', 'GEL-ICE'
+  name            text not null,
+  kind            text not null check (kind in ('box','mailer','filler','wrap','label','cold')),
+  -- Pilot quotes, not a rate card. Replace with the supplier's invoice lines.
+  unit_cost_minor bigint not null check (unit_cost_minor >= 0),
+  on_hand         integer not null default 0 check (on_hand >= 0),
+  is_active       boolean not null default true
+);
+
+-- What goes into a parcel, by the parcel class the warehouse already assigns.
+create table packaging_recipe (
+  parcel_class  text not null check (parcel_class in ('small','bulky','fragile','cold')),
+  material_code text not null references packaging_materials(code),
+  quantity      integer not null check (quantity > 0),
+  primary key (parcel_class, material_code)
+);
+
+create table packaging_purchases (
+  id              uuid primary key default gen_random_uuid(),
+  material_code   text not null references packaging_materials(code),
+  quantity        integer not null check (quantity > 0),
+  unit_cost_minor bigint not null check (unit_cost_minor >= 0),
+  total_minor     bigint not null check (total_minor >= 0),
+  purchased_by    uuid references users(id),
+  purchased_at    timestamptz not null default now(),
+  note            text
+);
+
+create table packaging_consumptions (
+  id             uuid primary key default gen_random_uuid(),
+  order_id       uuid not null unique references orders(id),
+  parcel_class   text not null,
+  parcels        integer not null check (parcels > 0),
+  cost_minor     bigint not null check (cost_minor >= 0),
+  -- The part of the cost we could not cover from stock: boxes used before they
+  -- were reordered. Posted to 2030, because we owe the supplier.
+  shortfall_minor bigint not null default 0 check (shortfall_minor >= 0),
+  pieces         jsonb not null default '[]'::jsonb,
+  packed_by      uuid references users(id),
+  packed_at      timestamptz not null default now()
 );
 
 -- Consigned stock that a count could not find.

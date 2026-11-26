@@ -10,6 +10,7 @@ import { AppError } from './errors.js';
 import { post, ACCOUNTS } from './ledger.js';
 import { issueInvoice } from './invoice.js';
 import { postCogs } from './catalogue.js';
+import { packOrder } from './packaging.js';
 import { vatFromInclusive } from './money.js';
 
 export async function recordDelivery(db, { orderNumber, cashCollectedMinor = null, riderId = null }) {
@@ -121,6 +122,11 @@ export async function recordDelivery(db, { orderNumber, cashCollectedMinor = nul
     // a margin the owner will make decisions on and should not.
     const cogs = await postCogs(tx, { orderId: order.id, orderNumber: order.order_number });
 
+    // The box. Consumed in the same transaction as the sale, because a delivery
+    // recorded without its packaging cost is a margin with a hole in it — and
+    // 5030 sat empty for months proving exactly that.
+    const packaging = await packOrder(tx, { orderId: order.id, orderNumber: order.order_number });
+
     await tx.query(`update orders set status = 'delivered' where id = $1`, [order.id]);
     await tx.query(
       `insert into order_events (order_id, event, detail, actor_type)
@@ -146,6 +152,10 @@ export async function recordDelivery(db, { orderNumber, cashCollectedMinor = nul
       fulfilmentMinor: fulfilment,
       sellerPayableMinor: payable,
       invoiceNumber: invoice.invoice_number,
+      packagingCostMinor: packaging.packagingCostMinor,
+      packagingClass: packaging.parcelClass,
+      packagingParcels: packaging.parcels,
+      packagingShortfallMinor: packaging.shortfallMinor,
       cogsMinor: cogs.cogsMinor,
       sellerCostMinor: cogs.sellerCostMinor,
       cogsUnresolved: cogs.unresolved,

@@ -27,6 +27,7 @@ import { payoutRun, payoutStatement, payoutsFor } from './payouts.js';
 import { importCatalogue } from './import.js';
 import { openStocktake, countSheet, recordCounts, applyStocktake, runStocktake } from './stocktake.js';
 import { decideStocktakeIncidents, openStocktakeIncidents } from './shrinkage.js';
+import { buyPackaging, packAnOrder, packagingQuote, packagingReport } from './packaging.js';
 import { requestOtp, verifyOtp, userFromToken, revokeSession, listSessions } from './auth.js';
 import { createSmsSender, productionReadiness } from './sms.js';
 
@@ -449,6 +450,57 @@ export function createApp({
     try {
       const actor = requireAdmin(req);
       res.json(await applyStocktake(db, { sessionId: req.params.id, actorId: actor.id, note: req.body?.note ?? null }));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  app.get('/api/ops/packaging', async (req, res, next) => {
+    try {
+      requireAdmin(req);
+      const limit = Math.min(Number(req.query.limit ?? 50) || 50, 500);
+      res.json(await packagingReport(db, { limit }));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  app.get('/api/ops/packaging/quote', async (req, res, next) => {
+    try {
+      requireAdmin(req);
+      res.json(
+        await packagingQuote(db, {
+          parcelClass: req.query.parcelClass ?? 'small',
+          parcels: Math.max(1, Number(req.query.parcels ?? 1) || 1),
+        }),
+      );
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  app.post('/api/ops/packaging/purchase', async (req, res, next) => {
+    try {
+      const actor = requireAdmin(req);
+      res.status(201).json(
+        await buyPackaging(db, {
+          materialCode: req.body?.materialCode,
+          quantity: req.body?.quantity,
+          unitCostMinor: req.body?.unitCostMinor ?? null,
+          note: req.body?.note ?? null,
+          actorId: actor.id,
+        }),
+      );
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  app.post('/api/ops/orders/:number/pack', async (req, res, next) => {
+    try {
+      const actor = requireAdmin(req);
+      const result = await packAnOrder(db, { orderNumber: req.params.number, actorId: actor.id });
+      res.status(result.alreadyPacked ? 200 : 201).json(result);
     } catch (err) {
       next(err);
     }
