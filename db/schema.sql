@@ -1185,3 +1185,49 @@ select
   a.cash_collected_minor
 from agg a
 join routes r on r.id = a.route_id;
+
+-- ---------------------------------------------------------------------------
+-- MARGIN PER ORDER
+-- ---------------------------------------------------------------------------
+-- The P&L of a single order, derived — never stored. Every figure is a ledger
+-- posting made against that order, so this view cannot disagree with the books
+-- in the way a second calculation would. VAT-excluded throughout, because that
+-- is how the ledger holds it.
+--
+-- `delivery_margin_minor` is null when a delivery fee has no last-mile cost
+-- posted against it: nothing posts rider cost per order yet, and a margin with
+-- half its costs missing is not a margin.
+create view order_margins as
+select
+  t.ref_id                                                            as order_id,
+  o.order_number,
+  o.status,
+  coalesce(sum(case when e.account_code = '4000' then e.credit_minor - e.debit_minor end), 0) as commission_minor,
+  coalesce(sum(case when e.account_code = '4010' then e.credit_minor - e.debit_minor end), 0) as fulfilment_minor,
+  coalesce(sum(case when e.account_code = '4020' then e.credit_minor - e.debit_minor end), 0) as delivery_minor,
+  coalesce(sum(case when e.account_code = '4030' then e.credit_minor - e.debit_minor end), 0) as cod_minor,
+  coalesce(sum(case when e.account_code = '5000' then e.debit_minor - e.credit_minor end), 0) as cogs_minor,
+  coalesce(sum(case when e.account_code = '5010' then e.debit_minor - e.credit_minor end), 0) as last_mile_minor,
+  coalesce(sum(case when e.account_code = '5020' then e.debit_minor - e.credit_minor end), 0) as psp_fee_minor,
+  coalesce(sum(case when e.account_code = '5030' then e.debit_minor - e.credit_minor end), 0) as packaging_minor,
+  coalesce(sum(case when e.account_code = '5040' then e.debit_minor - e.credit_minor end), 0) as refund_write_off_minor,
+  -- Our fees, before the delivery fee: the number an order has to clear on its
+  -- own merits.
+  coalesce(sum(case when e.account_code in ('4000','4010','4030') then e.credit_minor - e.debit_minor end), 0)
+    - coalesce(sum(case when e.account_code in ('5000','5010','5020','5030','5040') then e.debit_minor - e.credit_minor end), 0)
+                                                                      as goods_margin_minor,
+  coalesce(sum(case when e.account_code in ('4000','4010','4020','4030') then e.credit_minor - e.debit_minor end), 0)
+    - coalesce(sum(case when e.account_code in ('5000','5010','5020','5030','5040') then e.debit_minor - e.credit_minor end), 0)
+                                                                      as net_margin_minor
+from ledger_transactions t
+join ledger_entries e on e.transaction_id = t.id
+left join orders o on o.id = t.ref_id
+where t.ref_type = 'order'
+  and t.ref_id is not null
+  and e.account_code in ('4000','4010','4020','4030','5000','5010','5020','5030','5040')
+group by t.ref_id, o.order_number, o.status;
+
+-- Grants are revoked in the Supabase migration, not here: `anon` and
+-- `authenticated` are Supabase's roles, and the test database does not have
+-- them. The migration is where row-level security lives, so the revoke lives
+-- beside it.

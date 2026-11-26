@@ -13,7 +13,7 @@ npm install
 npm run migrate          # db/schema.sql → the database
 npm run seed:demo        # one seller, three SKUs, one route, three addresses
 npm start                # API on 0.0.0.0:4000
-npm test                 # 130 tests against real PostgreSQL 16
+npm test                 # 144 tests against real PostgreSQL 16
 ```
 
 ## What it runs on
@@ -70,6 +70,8 @@ npm test                 # 130 tests against real PostgreSQL 16
 | POST | `/api/ops/catalogue/import` | CSV import as drafts; all-or-nothing, line-numbered errors, `dryRun` |
 | POST | `/api/ops/stocktake` | counts in, variances recorded, consignment shortfalls raised as incidents |
 | GET | `/api/ops/packaging` | per-order packaging cost vs fulfilment fee; names orders where the box costs more |
+| GET | `/api/ops/profitability` | every order's P&L read off the ledger: fees, goods, box, refunds, tie-out |
+| GET | `/api/ops/profitability/sellers` | commission and fulfilment earned per seller |
 | GET | `/api/ops/packaging/quote` | what a parcel of a given class costs, from the recipe |
 | POST | `/api/ops/packaging/purchase` | buy materials into stock (Dr 1110 / Cr Bank) |
 | POST | `/api/ops/orders/:number/pack` | consume packaging for an order, once |
@@ -138,6 +140,28 @@ before the rider moves. A cold-chain parcel costs **P24.35** and is underwater o
 one unit. `GET /api/ops/packaging` names every order where the fee did not buy the
 box rather than averaging it away.
 
+## The margin report that admits what it does not know
+
+`GET /api/ops/profitability` is arithmetic on postings that already exist: every
+delivery, refund, cost of goods and box is posted against its order with
+`ref_type = 'order'`, so the per-order P&L is a `group by`, not a second opinion.
+Two margins come out of it — `goodsMarginMinor` (our fees less the goods, the box
+and the payment fee) and `netMarginMinor` (that plus the delivery fee).
+
+The report is explicit about the two costs missing from the ledger: consigned
+goods cost us nothing, so cost of goods is zero on a consignment order, and
+**nothing posts a rider's cost against an order yet**, so a delivery fee is
+revenue with no cost behind it. `deliveryUncosted` marks those orders and
+`summary.deliveryUncostedMinor` totals them; the net margin is labelled an upper
+bound rather than presented as profit. On the seeded pilot the honest reading is
+that packaging is 100% of the only cost the books attribute to an order.
+
+`tieOut` proves orders + unattributed = the ledger, account by account. Costs
+that belong to no single order (a bank charge, a stocktake) are reported as
+`unattributed`, never smeared across orders to make an average look better.
+`order_margins` is the same arithmetic as a SQL view, for anyone querying the
+database directly.
+
 ## Counting a shelf takes hours
 
 A stocktake is a **session** (`ST-2026-0001`), not one HTTP payload: opened, counted
@@ -190,7 +214,7 @@ src/
   refunds.js        two channels, exact reversal, restock rules
   invoice.js        immutable VAT invoice
   server.js         the API
-test/               130 tests: money, ledger, orders, payments, refunds, shelf, payouts, auth, sms, import, stocktake, shrinkage, packaging, HTTP
+test/               144 tests: money, ledger, orders, payments, refunds, shelf, payouts, auth, sms, import, stocktake, shrinkage, packaging, profitability, HTTP
 ```
 
 ## The two bugs this harness found on day one

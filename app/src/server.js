@@ -28,6 +28,7 @@ import { importCatalogue } from './import.js';
 import { openStocktake, countSheet, recordCounts, applyStocktake, runStocktake } from './stocktake.js';
 import { decideStocktakeIncidents, openStocktakeIncidents } from './shrinkage.js';
 import { buyPackaging, packAnOrder, packagingQuote, packagingReport } from './packaging.js';
+import { orderMargins, marginBySeller } from './profitability.js';
 import { requestOtp, verifyOtp, userFromToken, revokeSession, listSessions } from './auth.js';
 import { createSmsSender, productionReadiness } from './sms.js';
 
@@ -460,6 +461,36 @@ export function createApp({
       requireAdmin(req);
       const limit = Math.min(Number(req.query.limit ?? 50) || 50, 500);
       res.json(await packagingReport(db, { limit }));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // The order's own P&L, read off the ledger. Deliveries, refunds, COGS and
+  // packaging are all posted against the order, so this is arithmetic on facts
+  // already recorded rather than a second computation that could disagree.
+  app.get('/api/ops/profitability', async (req, res, next) => {
+    try {
+      requireAdmin(req);
+      const limit = Math.min(Number(req.query.limit ?? 200) || 200, 1000);
+      res.json(
+        await orderMargins(db, {
+          from: req.query.from ?? null,
+          to: req.query.to ?? null,
+          limit,
+        }),
+      );
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  app.get('/api/ops/profitability/sellers', async (req, res, next) => {
+    try {
+      requireAdmin(req);
+      res.json(
+        await marginBySeller(db, { from: req.query.from ?? null, to: req.query.to ?? null }),
+      );
     } catch (err) {
       next(err);
     }

@@ -143,6 +143,14 @@ export async function recordDelivery(db, { orderNumber, cashCollectedMinor = nul
     // net of delivery and the cash-handling fee. VAT was never ours.
     const keptMinor = commission + fulfilment + (deliveryMinor - deliveryVat) + (codFeeMinor - codVat);
 
+    // What is left after the goods and the box. `keptMinor` is the revenue side
+    // and `grossMarginMinor` prices only the goods; this is the number to quote
+    // when someone asks whether an order made money, because a margin calculated
+    // with the cardboard left out is the mistake 5030 existed to expose.
+    const keptAfterPackagingMinor = keptMinor - packaging.packagingCostMinor;
+    const netMarginMinor =
+      cogs.unresolved.length === 0 ? keptAfterPackagingMinor - cogs.cogsMinor : null;
+
     return {
       orderNumber: order.order_number,
       status: 'delivered',
@@ -160,6 +168,8 @@ export async function recordDelivery(db, { orderNumber, cashCollectedMinor = nul
       sellerCostMinor: cogs.sellerCostMinor,
       cogsUnresolved: cogs.unresolved,
       keptMinor,
+      keptAfterPackagingMinor,
+      netMarginMinor,
       // What Afrikart kept, less what the goods cost Afrikart. Consignment stock
       // costs us nothing, so this is positive; the seller's own cost is reported
       // beside it rather than subtracted from our margin.
