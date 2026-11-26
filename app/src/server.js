@@ -24,7 +24,8 @@ import {
   marginByOrder,
 } from './catalogue.js';
 import { payoutRun, payoutStatement, payoutsFor } from './payouts.js';
-import { importCatalogue, runStocktake } from './import.js';
+import { importCatalogue } from './import.js';
+import { openStocktake, countSheet, recordCounts, applyStocktake, runStocktake } from './stocktake.js';
 import { decideStocktakeIncidents, openStocktakeIncidents } from './shrinkage.js';
 import { requestOtp, verifyOtp, userFromToken, revokeSession, listSessions } from './auth.js';
 import { createSmsSender, productionReadiness } from './sms.js';
@@ -405,6 +406,49 @@ export function createApp({
         actorId: actor.id,
       });
       res.status(result.dryRun ? 200 : 201).json(result);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  app.post('/api/ops/stocktake/sessions', async (req, res, next) => {
+    try {
+      const actor = requireAdmin(req);
+      const session = await openStocktake(db, { note: req.body?.note ?? null, actorId: actor.id });
+      res.status(201).json({ ...session, sheetUrl: `/api/ops/stocktake/sessions/${session.id}` });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  app.get('/api/ops/stocktake/sessions/:id', async (req, res, next) => {
+    try {
+      requireAdmin(req);
+      res.json(await countSheet(db, { sessionId: req.params.id }));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  app.post('/api/ops/stocktake/sessions/:id/counts', async (req, res, next) => {
+    try {
+      const actor = requireAdmin(req);
+      res.json(
+        await recordCounts(db, {
+          sessionId: req.params.id,
+          counts: req.body?.counts ?? [],
+          actorId: actor.id,
+        }),
+      );
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  app.post('/api/ops/stocktake/sessions/:id/apply', async (req, res, next) => {
+    try {
+      const actor = requireAdmin(req);
+      res.json(await applyStocktake(db, { sessionId: req.params.id, actorId: actor.id, note: req.body?.note ?? null }));
     } catch (err) {
       next(err);
     }

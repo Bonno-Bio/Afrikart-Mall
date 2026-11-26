@@ -741,6 +741,53 @@ create table payout_items (
   unique (order_item_id)
 );
 
+-- A stocktake is a session, not a single payload.
+--
+-- A warehouse counts over two hours with two people and a coffee break, and a
+-- count that only exists inside one HTTP request cannot survive that. The
+-- session also makes the count auditable afterwards: who opened it, who counted
+-- each line, what the system believed at the time, and what a second counter
+-- said when the first number looked wrong.
+create sequence stocktake_number_seq start 1;
+
+create table stocktake_sessions (
+  id              uuid primary key default gen_random_uuid(),
+  reference       text not null unique,          -- 'ST-2026-0001'
+  status          text not null default 'open'
+                    check (status in ('open','applied','abandoned')),
+  opened_by       uuid references users(id),
+  opened_at       timestamptz not null default now(),
+  closed_by       uuid references users(id),
+  closed_at       timestamptz,
+  note            text,
+  -- What applying it actually did, kept so the session is a record and not a form.
+  lines_counted   integer,
+  lines_adjusted  integer,
+  shrinkage_minor bigint,
+  constraint closed_session_has_a_time check ((status = 'open') = (closed_at is null))
+);
+create index on stocktake_sessions (status, opened_at desc);
+
+create table stocktake_entries (
+  id               uuid primary key default gen_random_uuid(),
+  session_id       uuid not null references stocktake_sessions(id) on delete cascade,
+  variant_id       uuid not null references product_variants(id),
+  sku              text not null,
+  -- Frozen when the line was first counted: the number the person was comparing
+  -- against. If stock moves while the count is open, that difference is a fact
+  -- about the count, not something to overwrite.
+  system_quantity  integer not null check (system_quantity >= 0),
+  counted_quantity integer not null check (counted_quantity >= 0),
+  counted_by       uuid references users(id),
+  counted_at       timestamptz not null default now(),
+  -- A second look at the same shelf, because the first number disagreed with the
+  -- system. Both are kept; applying uses the recount and reports the gap.
+  recount_quantity integer check (recount_quantity >= 0),
+  recount_by       uuid references users(id),
+  recount_at       timestamptz,
+  unique (session_id, variant_id)
+);
+
 -- Consigned stock that a count could not find.
 --
 -- The goods were never our asset, so a loss is not automatically our expense —

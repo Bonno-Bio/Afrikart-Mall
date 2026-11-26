@@ -13,7 +13,7 @@ npm install
 npm run migrate          # db/schema.sql → the database
 npm run seed:demo        # one seller, three SKUs, one route, three addresses
 npm start                # API on 0.0.0.0:4000
-npm test                 # 112 tests against real PostgreSQL 16
+npm test                 # 122 tests against real PostgreSQL 16
 ```
 
 ## What it runs on
@@ -69,6 +69,10 @@ npm test                 # 112 tests against real PostgreSQL 16
 | POST | `/api/ops/purchase-orders/{number}/receive` | stock + movements + ledger in one transaction |
 | POST | `/api/ops/catalogue/import` | CSV import as drafts; all-or-nothing, line-numbered errors, `dryRun` |
 | POST | `/api/ops/stocktake` | counts in, variances recorded, consignment shortfalls raised as incidents |
+| POST | `/api/ops/stocktake/sessions` | open a count; returns `ST-YYYY-NNNN` |
+| GET | `/api/ops/stocktake/sessions/:id` | the count sheet in bin-walk order, with progress |
+| POST | `/api/ops/stocktake/sessions/:id/counts` | count lines; call again to resume, repeat a SKU to recount |
+| POST | `/api/ops/stocktake/sessions/:id/apply` | applies once: movements, incidents, ledger; then it is a record |
 | GET | `/api/ops/stocktake/incidents` | open shortfalls waiting on a decision |
 | POST | `/api/ops/stocktake/incidents/decide` | `seller_absorbs` (no posting) or `afrikart_compensates` (Dr 5080 / Cr 2010) |
 | GET | `/api/ops/margin` | realised margin per delivered order |
@@ -116,6 +120,15 @@ refusing to start in production:
   - DATABASE_URL is not set: the process would run on an in-memory database.
 ```
 
+## Counting a shelf takes hours
+
+A stocktake is a **session** (`ST-2026-0001`), not one HTTP payload: opened, counted
+line by line, resumed after a break, applied once. The system quantity is frozen
+when a line is first counted, so a tin sold mid-count is a sale rather than a
+gain; a recount keeps both numbers and applies the second; and reserved units are
+checked again at apply, because stock sells while somebody is counting. Applying
+twice is a `409` — the session is a record afterwards, not a form.
+
 ## Who pays for stock that vanished
 
 A shortfall on consigned stock is recorded as `stocktake_incidents` with the landed
@@ -159,7 +172,7 @@ src/
   refunds.js        two channels, exact reversal, restock rules
   invoice.js        immutable VAT invoice
   server.js         the API
-test/               112 tests: money, ledger, orders, payments, refunds, shelf, payouts, auth, sms, import, shrinkage, HTTP
+test/               122 tests: money, ledger, orders, payments, refunds, shelf, payouts, auth, sms, import, stocktake, shrinkage, HTTP
 ```
 
 ## The two bugs this harness found on day one
