@@ -57,6 +57,44 @@ create table users (
 create index on users (phone) where phone is not null;
 create trigger users_touch before update on users for each row execute function set_updated_at();
 
+-- ---------------------------------------------------------------------------
+-- AUTHENTICATION (AFR-41)
+-- ---------------------------------------------------------------------------
+-- Phone OTP, because a Botswana customer's phone number is a better identity
+-- than an email address and a password they will reuse. Two tables, and one
+-- rule each: a code is single-use, a session is revocable.
+create table otp_challenges (
+  id           uuid primary key default gen_random_uuid(),
+  phone        text not null,
+  -- The code itself is never stored. A six-digit secret in a table is a
+  -- six-digit secret in every backup, dump and support screenshot.
+  code_hash    text not null,
+  purpose      text not null default 'login'
+                 check (purpose in ('login','seller_onboarding','payout_change')),
+  attempts     integer not null default 0 check (attempts >= 0),
+  max_attempts integer not null default 5 check (max_attempts between 1 and 10),
+  consumed_at  timestamptz,
+  expires_at   timestamptz not null,
+  requested_ip inet,
+  created_at   timestamptz not null default now()
+);
+create index on otp_challenges (phone, created_at desc);
+create index on otp_challenges (expires_at) where consumed_at is null;
+
+create table sessions (
+  id           uuid primary key default gen_random_uuid(),
+  user_id      uuid not null references users(id) on delete cascade,
+  -- Also a hash: a stolen session table must not be a set of usable tokens.
+  token_hash   text unique not null,
+  user_agent   text,
+  ip           inet,
+  created_at   timestamptz not null default now(),
+  last_used_at timestamptz not null default now(),
+  expires_at   timestamptz not null default now() + interval '30 days',
+  revoked_at   timestamptz
+);
+create index on sessions (user_id) where revoked_at is null;
+
 create table addresses (
   id            uuid primary key default gen_random_uuid(),
   user_id       uuid not null references users(id) on delete cascade,

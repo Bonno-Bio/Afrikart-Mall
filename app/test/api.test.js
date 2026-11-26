@@ -8,14 +8,22 @@ const SECRET = 'test-webhook-secret';
 
 async function withServer(fn) {
   const db = await freshDb();
-  const app = createApp({ db, webhookSecret: SECRET });
+  // devAuth keeps the header shortcut for this suite; the real bearer-token
+  // path is covered in auth.test.js with devAuth off.
+  const app = createApp({ db, webhookSecret: SECRET, devAuth: true });
   const server = app.listen(0, '127.0.0.1');
   await new Promise((resolve) => server.once('listening', resolve));
   const base = `http://127.0.0.1:${server.address().port}`;
   const call = async (path, { method = 'GET', body, headers = {} } = {}) => {
+    // Staff routes need a staff user now that roles are actually checked.
+    const asStaff = path.startsWith('/api/ops') || path.startsWith('/api/sellers');
     const res = await fetch(`${base}${path}`, {
       method,
-      headers: { 'content-type': 'application/json', 'x-user-id': IDS.customer, ...headers },
+      headers: {
+        'content-type': 'application/json',
+        'x-user-id': asStaff ? IDS.admin : IDS.customer,
+        ...headers,
+      },
       body: body ? JSON.stringify(body) : undefined,
     });
     const text = await res.text();

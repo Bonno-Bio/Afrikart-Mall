@@ -13,7 +13,7 @@ npm install
 npm run migrate          # db/schema.sql → the database
 npm run seed:demo        # one seller, three SKUs, one route, three addresses
 npm start                # API on 0.0.0.0:4000
-npm test                 # 72 tests against real PostgreSQL 16
+npm test                 # 81 tests against real PostgreSQL 16
 ```
 
 ## What it runs on
@@ -50,6 +50,10 @@ npm test                 # 72 tests against real PostgreSQL 16
 | Method | Path | Notes |
 |---|---|---|
 | GET | `/api/health` | reports the engine it is actually on |
+| POST | `/api/auth/otp` | phone OTP request; dev code only when `ALLOW_DEV_AUTH=1` |
+| POST | `/api/auth/verify` | six digits in, 30-day bearer token out |
+| GET | `/api/auth/me` | who am I, and where am I signed in |
+| POST | `/api/auth/logout` | revokes the session immediately |
 | POST | `/api/checkout/quote` | server-side pricing; `deliveryOptions`, `warnings`, `capacity_limited` |
 | POST | `/api/orders` | requires `Idempotency-Key`; `201` even on replay, with `replayed: true` |
 | GET | `/api/orders/{number}` | order, lines, event trail |
@@ -86,6 +90,16 @@ curl -s -X POST localhost:4000/api/orders \
 
 Send the same request again: same `AK-…` number, same stock, `replayed: true`.
 
+## Authentication
+
+Every route that touches money or stock takes `Authorization: Bearer <token>` from
+`POST /api/auth/verify`. `/api/ops/*` additionally requires the `admin` role. The
+`x-user-id` header still exists for local development and only when
+`ALLOW_DEV_AUTH=1`; it is off by default and refused in production.
+
+**No SMS gateway is integrated.** Codes are generated and hashed; nothing sends
+them. That is the one thing standing between this login and a real user.
+
 ## What B1 does not do
 
 Named, so nobody assumes it exists:
@@ -119,7 +133,7 @@ src/
   refunds.js        two channels, exact reversal, restock rules
   invoice.js        immutable VAT invoice
   server.js         the API
-test/               72 tests: money, ledger, orders, payments, refunds, shelf, payouts, HTTP
+test/               81 tests: money, ledger, orders, payments, refunds, shelf, payouts, auth, HTTP
 ```
 
 ## The two bugs this harness found on day one

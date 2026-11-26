@@ -11,7 +11,7 @@ import { post, ACCOUNTS } from './ledger.js';
 
 export async function loadOrder(db, orderNumber) {
   const res = await db.query(
-    `select id, order_number, status, subtotal_minor, delivery_minor, cod_fee_minor, vat_minor,
+    `select id, user_id, order_number, status, subtotal_minor, delivery_minor, cod_fee_minor, vat_minor,
             total_minor, delivery_method, placed_at, shipping_address
        from orders where order_number = $1`,
     [orderNumber],

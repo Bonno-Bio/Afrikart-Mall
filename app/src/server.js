@@ -24,6 +24,7 @@ import {
   marginByOrder,
 } from './catalogue.js';
 import { payoutRun, payoutStatement, payoutsFor } from './payouts.js';
+import { requestOtp, verifyOtp, userFromToken, revokeSession, listSessions } from './auth.js';
 
 export function verifyWebhookSignature(rawBody, signature, secret) {
   if (!secret) return false;
@@ -33,7 +34,16 @@ export function verifyWebhookSignature(rawBody, signature, secret) {
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
-export function createApp({ db, webhookSecret = process.env.PSP_WEBHOOK_SECRET, devAuth = true } = {}) {
+export function createApp({
+  db,
+  webhookSecret = process.env.PSP_WEBHOOK_SECRET,
+  // Off unless someone says so explicitly. A header that grants identity must
+  // never be the default, because defaults are what production ends up running.
+  devAuth = process.env.ALLOW_DEV_AUTH === '1',
+  // Separate switch: a test suite needs the code back without turning the
+  // header shortcut on. Both are off in production.
+  exposeOtpCodes = devAuth,
+} = {}) {
   const app = express();
   app.disable('x-powered-by');
   app.set('trust proxy', true);
@@ -50,10 +60,43 @@ export function createApp({ db, webhookSecret = process.env.PSP_WEBHOOK_SECRET, 
 
   const requestId = (req) => req.get('x-request-id') ?? crypto.randomUUID();
 
-  const currentUser = (req) => {
-    const id = req.get('x-user-id');
-    if (!id && !devAuth) throw new AppError(401, 'UNAUTHORISED', 'Sign in first.');
-    return id ?? null;
+  // Identity resolution runs once, before any route. A bearer token is the only
+  // real credential; `x-user-id` survives for local development and only when
+  // ALLOW_DEV_AUTH=1, and it is looked up so the role is the database's, not the
+  // caller's.
+  app.use(async (req, _res, next) => {
+    try {
+      const header = req.get('authorization') ?? '';
+      if (header.startsWith('Bearer ')) {
+        req.user = await userFromToken(db, header.slice(7).trim());
+        if (!req.user) throw new AppError(401, 'SESSION_INVALID', 'That session has ended. Sign in again.');
+        return next();
+      }
+      if (devAuth) {
+        const id = req.get('x-user-id');
+        if (id) {
+          const res = await db.query('select id, email, full_name, role from users where id = $1', [id]);
+          req.user = res.rows[0] ?? null;
+          req.authMode = 'dev-header';
+        }
+      }
+      return next();
+    } catch (err) {
+      return next(err);
+    }
+  });
+
+  const currentUser = (req) => req.user ?? null;
+  const requireUser = (req) => {
+    if (!req.user) throw new AppError(401, 'UNAUTHORISED', 'Sign in first.');
+    return req.user;
+  };
+  const requireAdmin = (req) => {
+    const user = requireUser(req);
+    if (user.role !== 'admin') {
+      throw new AppError(403, 'FORBIDDEN', 'That action is for staff.');
+    }
+    return user;
   };
 
   app.get('/api/health', async (_req, res) => {
@@ -65,11 +108,65 @@ export function createApp({ db, webhookSecret = process.env.PSP_WEBHOOK_SECRET, 
     }
   });
 
+  // -------------------------------------------------------------------------
+  // Authentication (AFR-41). Phone OTP in, session token out.
+  // -------------------------------------------------------------------------
+  app.post('/api/auth/otp', async (req, res, next) => {
+    try {
+      const { phone, purpose } = req.body ?? {};
+      const result = await requestOtp(db, {
+        phone,
+        purpose: purpose ?? 'login',
+        ip: req.ip ?? null,
+        // Never in production: a code that travels over HTTP authenticates
+        // whoever can read the response, which is everybody.
+        exposeCode: exposeOtpCodes && process.env.NODE_ENV !== 'production',
+      });
+      res.status(201).json(result);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  app.post('/api/auth/verify', async (req, res, next) => {
+    try {
+      const { phone, code } = req.body ?? {};
+      const session = await verifyOtp(db, {
+        phone,
+        code,
+        userAgent: req.get('user-agent') ?? null,
+        ip: req.ip ?? null,
+      });
+      res.status(201).json(session);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  app.get('/api/auth/me', async (req, res, next) => {
+    try {
+      const user = requireUser(req);
+      res.json({ user, sessions: await listSessions(db, { userId: user.id }) });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  app.post('/api/auth/logout', async (req, res, next) => {
+    try {
+      const header = req.get('authorization') ?? '';
+      const result = await revokeSession(db, { token: header.replace('Bearer ', '').trim() });
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  });
+
   app.post('/api/checkout/quote', async (req, res, next) => {
     try {
       const { items, addressId, deliveryMethod, paymentMethod } = req.body ?? {};
       const result = await quote(db, {
-        userId: currentUser(req),
+        userId: currentUser(req)?.id ?? null,
         items,
         addressId,
         deliveryMethod,
@@ -87,7 +184,7 @@ export function createApp({ db, webhookSecret = process.env.PSP_WEBHOOK_SECRET, 
       const key = req.get('Idempotency-Key');
       const { items, addressId, deliveryMethod, paymentMethod, scheduledDate } = req.body ?? {};
       const order = await placeOrder(db, {
-        userId: currentUser(req),
+        userId: requireUser(req).id,
         items,
         addressId,
         deliveryMethod,
@@ -103,7 +200,12 @@ export function createApp({ db, webhookSecret = process.env.PSP_WEBHOOK_SECRET, 
 
   app.get('/api/orders/:number', async (req, res, next) => {
     try {
+      const user = requireUser(req);
       const order = await loadOrder(db, req.params.number);
+      // An order number is guessable. Only its owner, or staff, may read it.
+      if (order.user_id && order.user_id !== user.id && user.role !== 'admin') {
+        throw new AppError(403, 'FORBIDDEN', 'That order is not yours.');
+      }
       const lines = await db.query(
         `select id, title_snapshot as title, quantity, unit_price_minor, line_subtotal_minor, status
            from order_items where order_id = $1 order by title_snapshot`,
@@ -121,7 +223,11 @@ export function createApp({ db, webhookSecret = process.env.PSP_WEBHOOK_SECRET, 
 
   app.get('/api/orders/:number/invoice', async (req, res, next) => {
     try {
+      const user = requireUser(req);
       const order = await loadOrder(db, req.params.number);
+      if (order.user_id && order.user_id !== user.id && user.role !== 'admin') {
+        throw new AppError(403, 'FORBIDDEN', 'That invoice is not yours.');
+      }
       const invoice = await issueInvoice(db, order.id);
       const lines = await db.query(
         `select title_snapshot, quantity, line_subtotal_minor from order_items where order_id = $1`,
@@ -171,6 +277,7 @@ export function createApp({ db, webhookSecret = process.env.PSP_WEBHOOK_SECRET, 
   // deliberately behind the same role check in both environments.
   app.post('/api/ops/orders/:number/deliver', async (req, res, next) => {
     try {
+      requireAdmin(req);
       const result = await recordDelivery(db, {
         orderNumber: req.params.number,
         cashCollectedMinor: req.body?.cashCollectedMinor ?? null,
@@ -184,12 +291,13 @@ export function createApp({ db, webhookSecret = process.env.PSP_WEBHOOK_SECRET, 
 
   app.post('/api/ops/orders/:number/refund', async (req, res, next) => {
     try {
+      requireAdmin(req);
       const { orderItemId, channel, reason } = req.body ?? {};
       const refund = await refundLine(db, {
         orderItemId,
         channel,
         reason,
-        requestedBy: currentUser(req),
+        requestedBy: requireAdmin(req).id,
       });
       res.status(201).json(refund);
     } catch (err) {
@@ -199,14 +307,16 @@ export function createApp({ db, webhookSecret = process.env.PSP_WEBHOOK_SECRET, 
 
   app.post('/api/ops/refunds/:id/complete', async (req, res, next) => {
     try {
+      requireAdmin(req);
       res.json(await completeRefund(db, { refundId: req.params.id, providerRef: req.body?.providerRef }));
     } catch (err) {
       next(err);
     }
   });
 
-  app.get('/api/ops/ledger', async (_req, res, next) => {
+  app.get('/api/ops/ledger', async (req, res, next) => {
     try {
+      requireAdmin(req);
       res.json(await trialBalance(db));
     } catch (err) {
       next(err);
@@ -225,8 +335,9 @@ export function createApp({ db, webhookSecret = process.env.PSP_WEBHOOK_SECRET, 
     }
   });
 
-  app.get('/api/ops/shelf', async (_req, res, next) => {
+  app.get('/api/ops/shelf', async (req, res, next) => {
     try {
+      requireAdmin(req);
       res.json(await shelfReport(db));
     } catch (err) {
       next(err);
@@ -235,7 +346,8 @@ export function createApp({ db, webhookSecret = process.env.PSP_WEBHOOK_SECRET, 
 
   app.post('/api/ops/products/:id/publish', async (req, res, next) => {
     try {
-      res.json(await publishProduct(db, { productId: req.params.id, actorId: currentUser(req) }));
+      requireAdmin(req);
+      res.json(await publishProduct(db, { productId: req.params.id, actorId: requireAdmin(req).id }));
     } catch (err) {
       next(err);
     }
@@ -243,10 +355,11 @@ export function createApp({ db, webhookSecret = process.env.PSP_WEBHOOK_SECRET, 
 
   app.post('/api/ops/purchase-orders/:poNumber/receive', async (req, res, next) => {
     try {
+      requireAdmin(req);
       const result = await receivePurchaseOrder(db, {
         poNumber: req.params.poNumber,
         note: req.body?.note ?? null,
-        receivedBy: currentUser(req),
+        receivedBy: requireAdmin(req).id,
       });
       res.status(201).json(result);
     } catch (err) {
@@ -256,6 +369,7 @@ export function createApp({ db, webhookSecret = process.env.PSP_WEBHOOK_SECRET, 
 
   app.get('/api/ops/margin', async (req, res, next) => {
     try {
+      requireAdmin(req);
       const limit = Math.min(Number(req.query.limit ?? 50) || 50, 500);
       res.json(await marginByOrder(db, { limit }));
     } catch (err) {
@@ -269,13 +383,14 @@ export function createApp({ db, webhookSecret = process.env.PSP_WEBHOOK_SECRET, 
   // -------------------------------------------------------------------------
   app.post('/api/ops/payouts/run', async (req, res, next) => {
     try {
+      requireAdmin(req);
       const { sellerId, periodStart, periodEnd, bankReference } = req.body ?? {};
       const result = await payoutRun(db, {
         sellerId: sellerId ?? null,
         periodStart: periodStart ?? null,
         periodEnd: periodEnd ?? null,
         bankReference: bankReference ?? null,
-        actorId: currentUser(req),
+        actorId: requireAdmin(req).id,
       });
       res.status(201).json(result);
     } catch (err) {
@@ -285,6 +400,7 @@ export function createApp({ db, webhookSecret = process.env.PSP_WEBHOOK_SECRET, 
 
   app.get('/api/ops/payouts/:id', async (req, res, next) => {
     try {
+      requireAdmin(req);
       res.json(await payoutStatement(db, { payoutId: req.params.id }));
     } catch (err) {
       next(err);
@@ -293,6 +409,7 @@ export function createApp({ db, webhookSecret = process.env.PSP_WEBHOOK_SECRET, 
 
   app.get('/api/sellers/:sellerId/payouts', async (req, res, next) => {
     try {
+      requireAdmin(req);
       res.json({ payouts: await payoutsFor(db, { sellerId: req.params.sellerId }) });
     } catch (err) {
       next(err);
