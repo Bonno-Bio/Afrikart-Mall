@@ -107,7 +107,23 @@ async function runForSeller(tx, { seller, start, end, actorId, bankReference }) 
   );
 
   const lines = linesRes.rows;
-  if (lines.length === 0) return null;
+
+  // Consigned stock we decided to make good. It is not a sale, so it cannot sit
+  // in gross, and it is not a refund; it is its own line on the statement, and
+  // it is paid once because the incident is stamped with the payout that paid it.
+  const compensationRes = await tx.query(
+    `select id, sku, value_minor
+       from stocktake_incidents
+      where seller_id = $1 and decision = 'afrikart_compensates'
+        and payout_id is null and decided_at::date <= $2::date
+      order by decided_at, id
+      for update`,
+    [seller.id, end],
+  );
+  const compensationIncidents = compensationRes.rows;
+  const compensation = compensationIncidents.reduce((a, i) => a + Number(i.value_minor), 0);
+
+  if (lines.length === 0 && compensation === 0) return null;
 
   // Gross on a payout is VAT-exclusive. The VAT portion of a sale was never the
   // seller's money and was never credited to their payable, so including it
@@ -121,10 +137,10 @@ async function runForSeller(tx, { seller, start, end, actorId, bankReference }) 
   const refunds = lines
     .filter((l) => l.status === 'returned')
     .reduce((a, l) => a + Number(l.seller_payable_minor), 0);
-  const net = gross - commission - fulfilment - refunds;
+  const net = gross - commission - fulfilment - refunds + compensation;
 
   const payableLines = lines.filter((l) => l.status === 'active');
-  const payable = payableLines.reduce((a, l) => a + Number(l.seller_payable_minor), 0);
+  const payable = payableLines.reduce((a, l) => a + Number(l.seller_payable_minor), 0) + compensation;
 
   if (net !== payable) {
     throw new AppError(
@@ -159,10 +175,14 @@ async function runForSeller(tx, { seller, start, end, actorId, bankReference }) 
     payoutRes = await tx.query(
       `insert into seller_payouts
          (seller_id, period_start, period_end, gross_minor, commission_minor,
-          fulfilment_minor, refunds_minor, net_minor, status, bank_reference, paid_at, approved_by)
-       values ($1, $2, $3, $4, $5, $6, $7, $8, 'paid', $9, now(), $10)
+          fulfilment_minor, refunds_minor, compensation_minor, net_minor, status,
+          bank_reference, paid_at, approved_by)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'paid', $10, now(), $11)
        returning id, period_start, period_end, net_minor, status`,
-      [seller.id, start, end, gross, commission, fulfilment, refunds, net, bankReference, actorId],
+      [
+        seller.id, start, end, gross, commission, fulfilment, refunds, compensation, net,
+        bankReference, actorId,
+      ],
     );
   } catch (err) {
     if (String(err.message).includes('seller_payouts_seller_id_period_start_period_end_key')) {
@@ -181,6 +201,13 @@ async function runForSeller(tx, { seller, start, end, actorId, bankReference }) 
       `insert into payout_items (payout_id, order_item_id, amount_minor) values ($1, $2, $3)`,
       [payout.id, line.id, Number(line.seller_payable_minor)],
     );
+  }
+
+  if (compensationIncidents.length > 0) {
+    await tx.query(`update stocktake_incidents set payout_id = $1 where id = any($2::uuid[])`, [
+      payout.id,
+      compensationIncidents.map((i) => i.id),
+    ]);
   }
 
   await post(tx, {
@@ -216,8 +243,10 @@ async function runForSeller(tx, { seller, start, end, actorId, bankReference }) 
     commissionMinor: commission,
     fulfilmentMinor: fulfilment,
     refundsMinor: refunds,
+    compensationMinor: compensation,
     netMinor: net,
     lines: payableLines.length,
+    compensatedIncidents: compensationIncidents.length,
   };
 }
 
@@ -230,7 +259,7 @@ export async function payoutStatement(db, { payoutId, sellerId = null } = {}) {
   const payoutRes = await db.query(
     `select p.id, p.seller_id, s.trading_name, p.period_start, p.period_end,
             p.gross_minor, p.commission_minor, p.fulfilment_minor, p.refunds_minor,
-            p.net_minor, p.status, p.bank_reference, p.paid_at
+            p.compensation_minor, p.net_minor, p.status, p.bank_reference, p.paid_at
        from seller_payouts p join sellers s on s.id = p.seller_id
       where p.id = $1 and ($2::uuid is null or p.seller_id = $2)`,
     [payoutId, sellerId],
@@ -263,8 +292,32 @@ export async function payoutStatement(db, { payoutId, sellerId = null } = {}) {
     paidMinor: Number(r.amount_minor),
   }));
 
-  const check =
-    items.reduce((a, i) => a + i.paidMinor, 0) === Number(payout.net_minor) - Number(payout.refunds_minor);
+  // Shrinkage on this period, at every decision — including the ones that moved
+  // no money. A seller who cannot see the loss they were not charged for will
+  // assume they were charged for it.
+  const incidentRes = await db.query(
+    `select id, sku, quantity_lost, unit_cost_minor, value_minor, decision, decided_at
+       from stocktake_incidents
+      where seller_id = $1 and created_at::date between $2::date and $3::date
+      order by created_at, sku`,
+    [payout.seller_id, payout.period_start, payout.period_end],
+  );
+  const shrinkage = incidentRes.rows.map((r) => ({
+    incidentId: r.id,
+    sku: r.sku,
+    quantityLost: Number(r.quantity_lost),
+    unitCostMinor: r.unit_cost_minor === null ? null : Number(r.unit_cost_minor),
+    valueMinor: r.value_minor === null ? null : Number(r.value_minor),
+    decision: r.decision,
+    chargedToSellerMinor: 0,
+    compensatedMinor: r.decision === 'afrikart_compensates' ? Number(r.value_minor ?? 0) : 0,
+  }));
+
+  const itemsSumMinor = items.reduce((a, i) => a + i.paidMinor, 0);
+  const compensationMinor = Number(payout.compensation_minor);
+  // Every pairable fact the seller can re-add: the lines, plus the compensation
+  // we chose to pay, must equal what we transferred.
+  const check = itemsSumMinor + compensationMinor === Number(payout.net_minor);
 
   return {
     payoutId: payout.id,
@@ -275,13 +328,23 @@ export async function payoutStatement(db, { payoutId, sellerId = null } = {}) {
     commissionMinor: Number(payout.commission_minor),
     fulfilmentMinor: Number(payout.fulfilment_minor),
     refundsMinor: Number(payout.refunds_minor),
+    compensationMinor,
     netMinor: Number(payout.net_minor),
     status: payout.status,
     bankReference: payout.bank_reference,
     paidAt: payout.paid_at,
     items,
-    // The arithmetic the seller would do themselves.
-    itemsSumMinor: items.reduce((a, i) => a + i.paidMinor, 0),
+    shrinkage,
+    // The arithmetic the seller would do themselves, spelled out.
+    itemsSumMinor,
+    arithmetic: {
+      grossMinor: Number(payout.gross_minor),
+      lessCommissionMinor: Number(payout.commission_minor),
+      lessFulfilmentMinor: Number(payout.fulfilment_minor),
+      lessRefundsMinor: Number(payout.refunds_minor),
+      plusCompensationMinor: compensationMinor,
+      equalsNetMinor: Number(payout.net_minor),
+    },
     reconciles: check,
   };
 }

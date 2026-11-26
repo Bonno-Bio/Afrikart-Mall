@@ -25,6 +25,7 @@ import {
 } from './catalogue.js';
 import { payoutRun, payoutStatement, payoutsFor } from './payouts.js';
 import { importCatalogue, runStocktake } from './import.js';
+import { decideStocktakeIncidents, openStocktakeIncidents } from './shrinkage.js';
 import { requestOtp, verifyOtp, userFromToken, revokeSession, listSessions } from './auth.js';
 import { createSmsSender, productionReadiness } from './sms.js';
 
@@ -404,6 +405,32 @@ export function createApp({
         actorId: actor.id,
       });
       res.status(result.dryRun ? 200 : 201).json(result);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  app.get('/api/ops/stocktake/incidents', async (req, res, next) => {
+    try {
+      requireAdmin(req);
+      const limit = Math.min(Number(req.query.limit ?? 100) || 100, 500);
+      res.json(await openStocktakeIncidents(db, { sellerId: req.query.sellerId ?? null, limit }));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  app.post('/api/ops/stocktake/incidents/decide', async (req, res, next) => {
+    try {
+      const actor = requireAdmin(req);
+      res.json(
+        await decideStocktakeIncidents(db, {
+          incidentIds: req.body?.incidentIds ?? [],
+          decision: req.body?.decision,
+          note: req.body?.note ?? null,
+          actorId: actor.id,
+        }),
+      );
     } catch (err) {
       next(err);
     }

@@ -420,8 +420,10 @@ export async function runStocktake(db, { counts, note = null, actorId = null, dr
       for (const entry of normalised) {
         const found = await tx.query(
           `select v.id as variant_id, v.sku, v.ownership, v.price_minor,
+                  p.seller_id,
                   coalesce(l.on_hand, 0) as on_hand, coalesce(l.reserved, 0) as reserved
              from product_variants v
+             join products p on p.id = v.product_id
              left join inventory_levels l on l.variant_id = v.id
             where v.sku = $1
             for update of v`,
@@ -453,11 +455,13 @@ export async function runStocktake(db, { counts, note = null, actorId = null, dr
           continue;
         }
 
-        await tx.query(
+        const movementRes = await tx.query(
           `insert into inventory_movements (variant_id, delta, reason, ref_type, note, created_by)
-           values ($1, $2, 'adjusted', 'stocktake', $3, $4)`,
+           values ($1, $2, 'adjusted', 'stocktake', $3, $4)
+           returning id`,
           [row.variant_id, delta, note ?? `counted ${entry.counted}, system said ${onHand}`, actorId],
         );
+        const movementId = movementRes.rows[0].id;
 
         await tx.query(
           `insert into inventory_levels (variant_id, on_hand) values ($1, $2)
@@ -506,6 +510,21 @@ export async function runStocktake(db, { counts, note = null, actorId = null, dr
           }
         }
 
+        // A shortfall on consigned stock is recorded as evidence plus a question,
+        // not as an expense. Somebody must decide who carries it (AFR-48), and
+        // until they do it sits open on the seller's account.
+        let incidentId = null;
+        if (!owned && delta < 0 && varianceValueMinor !== null) {
+          const incident = await tx.query(
+            `insert into stocktake_incidents
+               (movement_id, seller_id, variant_id, sku, quantity_lost, unit_cost_minor, value_minor, note)
+             values ($1, $2, $3, $4, $5, $6, $7, $8)
+             returning id`,
+            [movementId, row.seller_id, row.variant_id, entry.sku, Math.abs(delta), cost, varianceValueMinor, note ?? null],
+          );
+          incidentId = incident.rows[0].id;
+        }
+
         report.adjusted += 1;
         report.variances.push({
           sku: entry.sku,
@@ -516,7 +535,11 @@ export async function runStocktake(db, { counts, note = null, actorId = null, dr
           // Consignment variance is the seller's loss, not ours: the goods were
           // never our asset, so posting it to our P&L would be a fiction.
           postedMinor: owned ? varianceValueMinor ?? 0 : 0,
-          sellerNotified: owned ? null : 'report to seller statement',
+          // Consignment shortfalls are not posted to our P&L; they are raised as
+          // an incident for a human decision, and they reach the seller's
+          // statement either as a memo or as compensation.
+          incidentId,
+          sellerNotified: owned ? null : 'raised as a stocktake incident',
         });
       }
 

@@ -13,7 +13,7 @@ npm install
 npm run migrate          # db/schema.sql → the database
 npm run seed:demo        # one seller, three SKUs, one route, three addresses
 npm start                # API on 0.0.0.0:4000
-npm test                 # 104 tests against real PostgreSQL 16
+npm test                 # 112 tests against real PostgreSQL 16
 ```
 
 ## What it runs on
@@ -68,7 +68,9 @@ npm test                 # 104 tests against real PostgreSQL 16
 | POST | `/api/ops/products/{id}/publish` | refuses an uncosted SKU, a missing photo, an unlicensed category |
 | POST | `/api/ops/purchase-orders/{number}/receive` | stock + movements + ledger in one transaction |
 | POST | `/api/ops/catalogue/import` | CSV import as drafts; all-or-nothing, line-numbered errors, `dryRun` |
-| POST | `/api/ops/stocktake` | counts in, variances recorded, shrinkage priced |
+| POST | `/api/ops/stocktake` | counts in, variances recorded, consignment shortfalls raised as incidents |
+| GET | `/api/ops/stocktake/incidents` | open shortfalls waiting on a decision |
+| POST | `/api/ops/stocktake/incidents/decide` | `seller_absorbs` (no posting) or `afrikart_compensates` (Dr 5080 / Cr 2010) |
 | GET | `/api/ops/margin` | realised margin per delivered order |
 | POST | `/api/ops/payouts/run` | pays sellers what the ledger says we owe, from their order lines |
 | GET | `/api/ops/payouts/{id}` | the statement a seller can add up themselves |
@@ -114,6 +116,16 @@ refusing to start in production:
   - DATABASE_URL is not set: the process would run on an in-memory database.
 ```
 
+## Who pays for stock that vanished
+
+A shortfall on consigned stock is recorded as `stocktake_incidents` with the landed
+value and a question attached, not an expense. `seller_absorbs` posts nothing —
+those goods were never our asset, so booking the loss would put a cost in our P&L
+that we never suffered. `afrikart_compensates` posts Dr 5080 Inventory shrinkage /
+Cr 2010 Seller payable and is paid in the next payout, once, because the incident
+carries the payout that settled it. Charging a seller cash for goods we never
+bought is deliberately not offered.
+
 ## What B1 does not do
 
 Named, so nobody assumes it exists:
@@ -147,7 +159,7 @@ src/
   refunds.js        two channels, exact reversal, restock rules
   invoice.js        immutable VAT invoice
   server.js         the API
-test/               104 tests: money, ledger, orders, payments, refunds, shelf, payouts, auth, sms, import, HTTP
+test/               112 tests: money, ledger, orders, payments, refunds, shelf, payouts, auth, sms, import, shrinkage, HTTP
 ```
 
 ## The two bugs this harness found on day one

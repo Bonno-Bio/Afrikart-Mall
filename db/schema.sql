@@ -714,6 +714,10 @@ create table seller_payouts (
   commission_minor   bigint not null default 0,
   fulfilment_minor   bigint not null default 0,
   refunds_minor      bigint not null default 0,
+  -- Consigned stock that vanished on our shelf and that we chose to make good.
+  -- It adds to what the seller receives, and it is not a sale, so it cannot sit
+  -- inside gross without making the statement a fiction.
+  compensation_minor bigint not null default 0,
   net_minor          bigint not null,
   status             text not null default 'draft'
                        check (status in ('draft','approved','paid','failed')),
@@ -721,7 +725,8 @@ create table seller_payouts (
   paid_at            timestamptz,
   approved_by        uuid references users(id),
   created_at         timestamptz not null default now(),
-  constraint payout_math check (net_minor = gross_minor - commission_minor - fulfilment_minor - refunds_minor),
+  constraint payout_math check
+    (net_minor = gross_minor - commission_minor - fulfilment_minor - refunds_minor + compensation_minor),
   unique (seller_id, period_start, period_end)
 );
 
@@ -735,6 +740,41 @@ create table payout_items (
   -- An order line can only ever be paid once.
   unique (order_item_id)
 );
+
+-- Consigned stock that a count could not find.
+--
+-- The goods were never our asset, so a loss is not automatically our expense —
+-- and it is not automatically the seller's cash either. Somebody has to decide,
+-- and the decision has to be recorded next to the evidence rather than implied
+-- by a missing number. `seller_absorbs` posts nothing: we are not their insurer,
+-- and inventing an entry for stock we never carried would put a loss in our
+-- books that we never suffered. `afrikart_compensates` does post: Dr 5080 /
+-- Cr 2010, because then we chose to take the loss onto our own P&L.
+create table stocktake_incidents (
+  id              uuid primary key default gen_random_uuid(),
+  movement_id     bigint not null unique references inventory_movements(id),
+  seller_id       uuid not null references sellers(id),
+  variant_id      uuid not null references product_variants(id),
+  sku             text not null,
+  quantity_lost   integer not null check (quantity_lost > 0),
+  -- Null only where no purchase has ever landed; the incident is still recorded
+  -- and flagged, because an uncosted loss is still a loss.
+  unit_cost_minor bigint check (unit_cost_minor >= 0),
+  value_minor     bigint check (value_minor >= 0),
+  decision        text not null default 'open'
+                    check (decision in ('open','seller_absorbs','afrikart_compensates')),
+  decided_by      uuid references users(id),
+  decided_at      timestamptz,
+  -- Which payout made it good. One incident is compensated once.
+  payout_id       uuid references seller_payouts(id),
+  note            text,
+  created_at      timestamptz not null default now(),
+  constraint incident_decision_needs_a_time check ((decision = 'open') = (decided_at is null)),
+  constraint compensated_incident_needs_evidence
+    check (decision <> 'afrikart_compensates' or (value_minor is not null and value_minor > 0))
+);
+create index on stocktake_incidents (seller_id, decision);
+create index on stocktake_incidents (payout_id) where payout_id is not null;
 
 -- ---------------------------------------------------------------------------
 -- DELIVERY — the moat lives in these tables, not in the storefront
