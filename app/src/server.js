@@ -24,6 +24,7 @@ import {
   marginByOrder,
 } from './catalogue.js';
 import { payoutRun, payoutStatement, payoutsFor } from './payouts.js';
+import { importCatalogue, runStocktake } from './import.js';
 import { requestOtp, verifyOtp, userFromToken, revokeSession, listSessions } from './auth.js';
 import { createSmsSender, productionReadiness } from './sms.js';
 
@@ -373,6 +374,36 @@ export function createApp({
         receivedBy: requireAdmin(req).id,
       });
       res.status(201).json(result);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  app.post('/api/ops/catalogue/import', async (req, res, next) => {
+    try {
+      const actor = requireAdmin(req);
+      const result = await importCatalogue(db, {
+        csv: req.body?.csv ?? '',
+        sellerSlug: req.body?.sellerSlug ?? null,
+        dryRun: req.body?.dryRun === true,
+        actorId: actor.id,
+      });
+      res.status(result.dryRun ? 200 : 201).json(result);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  app.post('/api/ops/stocktake', async (req, res, next) => {
+    try {
+      const actor = requireAdmin(req);
+      const result = await runStocktake(db, {
+        counts: req.body?.counts ?? [],
+        note: req.body?.note ?? null,
+        dryRun: req.body?.dryRun === true,
+        actorId: actor.id,
+      });
+      res.status(result.dryRun ? 200 : 201).json(result);
     } catch (err) {
       next(err);
     }

@@ -13,7 +13,7 @@ npm install
 npm run migrate          # db/schema.sql → the database
 npm run seed:demo        # one seller, three SKUs, one route, three addresses
 npm start                # API on 0.0.0.0:4000
-npm test                 # 89 tests against real PostgreSQL 16
+npm test                 # 104 tests against real PostgreSQL 16
 ```
 
 ## What it runs on
@@ -67,6 +67,8 @@ npm test                 # 89 tests against real PostgreSQL 16
 | GET | `/api/ops/shelf` | price, landed cost, seller spread, on hand, `sellersUnderwater` |
 | POST | `/api/ops/products/{id}/publish` | refuses an uncosted SKU, a missing photo, an unlicensed category |
 | POST | `/api/ops/purchase-orders/{number}/receive` | stock + movements + ledger in one transaction |
+| POST | `/api/ops/catalogue/import` | CSV import as drafts; all-or-nothing, line-numbered errors, `dryRun` |
+| POST | `/api/ops/stocktake` | counts in, variances recorded, shrinkage priced |
 | GET | `/api/ops/margin` | realised margin per delivered order |
 | POST | `/api/ops/payouts/run` | pays sellers what the ledger says we owe, from their order lines |
 | GET | `/api/ops/payouts/{id}` | the statement a seller can add up themselves |
@@ -145,7 +147,7 @@ src/
   refunds.js        two channels, exact reversal, restock rules
   invoice.js        immutable VAT invoice
   server.js         the API
-test/               89 tests: money, ledger, orders, payments, refunds, shelf, payouts, auth, sms, HTTP
+test/               104 tests: money, ledger, orders, payments, refunds, shelf, payouts, auth, sms, import, HTTP
 ```
 
 ## The two bugs this harness found on day one

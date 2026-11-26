@@ -29,6 +29,9 @@ export const ACCOUNTS = {
   LAST_MILE: '5010',
   PSP_FEES: '5020',
   REFUNDS: '5040',
+  // Stock that left the building without a sale: theft, damage, miscount.
+  // Its own account, because burying it in cost of goods hides the trend.
+  SHRINKAGE: '5080',
 };
 
 /**

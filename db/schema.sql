@@ -636,7 +636,8 @@ insert into chart_of_accounts (code, name, type) values
   ('5040','Refunds and claims','expense'),
   ('5050','Marketing','expense'),
   ('5060','Payroll','expense'),
-  ('5070','Occupancy and utilities','expense');
+  ('5070','Occupancy and utilities','expense'),
+  ('5080','Inventory shrinkage','expense');
 
 create table ledger_transactions (
   id          uuid primary key default gen_random_uuid(),
