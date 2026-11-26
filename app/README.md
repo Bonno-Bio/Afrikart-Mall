@@ -13,7 +13,7 @@ npm install
 npm run migrate          # db/schema.sql → the database
 npm run seed:demo        # one seller, three SKUs, one route, three addresses
 npm start                # API on 0.0.0.0:4000
-npm test                 # 144 tests against real PostgreSQL 16
+npm test                 # 154 tests against real PostgreSQL 16
 ```
 
 ## What it runs on
@@ -71,6 +71,11 @@ npm test                 # 144 tests against real PostgreSQL 16
 | POST | `/api/ops/stocktake` | counts in, variances recorded, consignment shortfalls raised as incidents |
 | GET | `/api/ops/packaging` | per-order packaging cost vs fulfilment fee; names orders where the box costs more |
 | GET | `/api/ops/profitability` | every order's P&L read off the ledger: fees, goods, box, refunds, tie-out |
+| GET | `/api/ops/last-mile` | runs, cost per drop, and whether the delivery fee pays for the drop |
+| GET | `/api/ops/last-mile/payable` | what is owed to each rider for costed runs |
+| POST | `/api/ops/last-mile/runs` | open a run: rider, route, date, rider pay, fuel |
+| POST | `/api/ops/last-mile/runs/:id/close` | divide the trip across its drops; posts Dr 5010 / Cr 2040 once |
+| POST | `/api/ops/orders/:number/psp-fee` | record a provider fee that arrived in a settlement file |
 | GET | `/api/ops/profitability/sellers` | commission and fulfilment earned per seller |
 | GET | `/api/ops/packaging/quote` | what a parcel of a given class costs, from the recipe |
 | POST | `/api/ops/packaging/purchase` | buy materials into stock (Dr 1110 / Cr Bank) |
@@ -162,6 +167,27 @@ that belong to no single order (a bank charge, a stocktake) are reported as
 `order_margins` is the same arithmetic as a SQL view, for anyone querying the
 database directly.
 
+## The drop costs P123. The fee pays P26.
+
+The last mile is costed per **run** — one rider, one route, one day — and divided
+across the drops that rode on it (`Dr 5010 / Cr 2040 Rider payable`). A rider is
+paid for the day whether the eleventh drop happens or not, so the unit of cost is
+the trip, not the parcel. Closing a run twice is refused; a run with no drops or
+no cost cannot be closed at all.
+
+On the pilot, a P370 run over three drops is **P123.33 a drop** against P26.32 of
+net delivery fee: every order turns loss-making. The same run at the seeded
+route's 22-drop capacity is **P16.82 a drop** — about P9.50 to the good. So the
+finding is not that delivery loses money; it is that **the fee was priced for a
+route that is full**, and free delivery over P250 makes baskets bigger while
+making routes emptier.
+
+`GET /api/ops/last-mile` reports `perDropMinor`, `deliveryRevenueMinor`,
+`lastMileCostMinor`, `feeCoversDrop` and `uncostedDeliveries` — the delivered
+orders still carrying no cost, so the gap stays visible while it is being closed.
+Payment provider fees are now posted against the order (`Dr 5020 / Cr 1020`), not
+against the payment, so they reach the per-order margin too.
+
 ## Counting a shelf takes hours
 
 A stocktake is a **session** (`ST-2026-0001`), not one HTTP payload: opened, counted
@@ -214,7 +240,7 @@ src/
   refunds.js        two channels, exact reversal, restock rules
   invoice.js        immutable VAT invoice
   server.js         the API
-test/               144 tests: money, ledger, orders, payments, refunds, shelf, payouts, auth, sms, import, stocktake, shrinkage, packaging, profitability, HTTP
+test/               154 tests: money, ledger, orders, payments, refunds, shelf, payouts, auth, sms, import, stocktake, shrinkage, packaging, profitability, last mile, HTTP
 ```
 
 ## The two bugs this harness found on day one

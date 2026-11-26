@@ -29,6 +29,7 @@ import { openStocktake, countSheet, recordCounts, applyStocktake, runStocktake }
 import { decideStocktakeIncidents, openStocktakeIncidents } from './shrinkage.js';
 import { buyPackaging, packAnOrder, packagingQuote, packagingReport } from './packaging.js';
 import { orderMargins, marginBySeller } from './profitability.js';
+import { openRun, closeRun, lastMileReport, riderPayable, recordPspFee } from './lastmile.js';
 import { requestOtp, verifyOtp, userFromToken, revokeSession, listSessions } from './auth.js';
 import { createSmsSender, productionReadiness } from './sms.js';
 
@@ -490,6 +491,65 @@ export function createApp({
       requireAdmin(req);
       res.json(
         await marginBySeller(db, { from: req.query.from ?? null, to: req.query.to ?? null }),
+      );
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // What a run cost, and whether the delivery fee pays for the drop.
+  app.get('/api/ops/last-mile', async (req, res, next) => {
+    try {
+      requireAdmin(req);
+      res.json(await lastMileReport(db, { from: req.query.from ?? null, to: req.query.to ?? null }));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  app.get('/api/ops/last-mile/payable', async (req, res, next) => {
+    try {
+      requireAdmin(req);
+      res.json(await riderPayable(db));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  app.post('/api/ops/last-mile/runs', async (req, res, next) => {
+    try {
+      requireAdmin(req);
+      res.status(201).json(
+        await openRun(db, {
+          routeId: req.body?.routeId ?? null,
+          riderId: req.body?.riderId ?? null,
+          runDate: req.body?.runDate,
+          riderPayMinor: req.body?.riderPayMinor ?? 0,
+          fuelMinor: req.body?.fuelMinor ?? 0,
+          note: req.body?.note ?? null,
+        }),
+      );
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  app.post('/api/ops/last-mile/runs/:id/close', async (req, res, next) => {
+    try {
+      const actor = requireAdmin(req);
+      res.json(await closeRun(db, { runId: req.params.id, actorId: actor.id }));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // A fee that arrived with a settlement file rather than at capture.
+  app.post('/api/ops/orders/:number/psp-fee', async (req, res, next) => {
+    try {
+      requireAdmin(req);
+      const order = await loadOrder(db, req.params.number);
+      res.status(201).json(
+        await recordPspFee(db, { orderId: order.id, feeMinor: req.body?.feeMinor, memo: req.body?.memo ?? null }),
       );
     } catch (err) {
       next(err);

@@ -14,6 +14,8 @@ export const IDS = {
   customer: '11111111-1111-4111-8111-111111111111',
   sellerUser: '22222222-2222-4222-8222-222222222222',
   admin: '33333333-3333-4333-8333-333333333333',
+  riderUser: '33333333-3333-4333-8333-333333333334',
+  rider: 'cccccccc-cccc-4ccc-8ccc-ccccccccccc1',
   seller: '44444444-4444-4444-8444-444444444444',
   category: '55555555-5555-4555-8555-555555555555',
   routeWest: '66666666-6666-4666-8666-666666666666',
@@ -38,8 +40,9 @@ export async function seed(db) {
     `insert into users (id, email, phone, full_name, role) values
        ($1, 'amantle@example.com', '+26771000001', 'Amantle Sekgoma', 'customer'),
        ($2, 'naledi@naledibeauty.co.bw', '+26771000002', 'Naledi Kgosi', 'seller'),
-       ($3, 'ops@afrikart.co.bw', '+26771000003', 'Afrikart Ops', 'admin')`,
-    [IDS.customer, IDS.sellerUser, IDS.admin],
+       ($3, 'ops@afrikart.co.bw', '+26771000003', 'Afrikart Ops', 'admin'),
+       ($4, 'dineo@afrikart.co.bw', '+26771000005', 'Dineo Mothusi', 'rider')`,
+    [IDS.customer, IDS.sellerUser, IDS.admin, IDS.riderUser],
   );
 
   await db.query(
@@ -210,6 +213,12 @@ export async function seed(db) {
         { accountCode: ACCOUNTS.BANK, credit: openingPackaging },
       ],
     }),
+  );
+
+  await db.query(
+    `insert into riders (id, user_id, vehicle, plate, cash_float_limit_minor)
+     values ($1, $2, 'scooter', 'B 123 ABC', 300000)`,
+    [IDS.rider, IDS.riderUser],
   );
 
   await db.query(

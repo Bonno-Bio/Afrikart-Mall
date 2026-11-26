@@ -20,6 +20,8 @@ export const ACCOUNTS = {
   INVENTORY: '1100',
   PACKAGING_STOCK: '1110',
   PACKAGING_ACCRUAL: '2030',
+  // Earned by a rider on a run, not yet paid out.
+  RIDER_PAYABLE: '2040',
   // The box, the filler and the label. Long unused; packaging cost is not a
   // rounding error when the fulfilment fee is 4%.
   PACKAGING: '5030',

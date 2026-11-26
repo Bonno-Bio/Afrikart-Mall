@@ -63,24 +63,33 @@ export async function capturePayment(db, { paymentId, providerRef, providerFeeMi
 
     // Cash arrived at the PSP, but we owe the customer goods. It is a liability
     // until the parcel is delivered — which is also when the seller earns it.
-    const entries = [
-      { accountCode: ACCOUNTS.PSP_RECEIVABLE, debit: amountMinor },
-      { accountCode: ACCOUNTS.CUSTOMER_PREPAYMENTS, credit: amountMinor },
-    ];
-    if (feeMinor > 0) {
-      entries.push(
-        { accountCode: ACCOUNTS.PSP_FEES, debit: feeMinor },
-        { accountCode: ACCOUNTS.PSP_RECEIVABLE, credit: feeMinor },
-      );
-    }
-
     await post(tx, {
       kind: 'capture',
       refType: 'payment',
       refId: payment.id,
       memo: `capture ${payment.provider_ref ?? ''} for ${payment.order_number}`,
-      entries,
+      entries: [
+        { accountCode: ACCOUNTS.PSP_RECEIVABLE, debit: amountMinor },
+        { accountCode: ACCOUNTS.CUSTOMER_PREPAYMENTS, credit: amountMinor },
+      ],
     });
+
+    // The provider's fee is a cost of *this order*, not of the act of capturing.
+    // Posting it against the payment kept it out of every per-order margin — the
+    // gap `docs/018` reported — so it gets its own transaction, tagged to the
+    // order, in the same database transaction as the capture.
+    if (feeMinor > 0) {
+      await post(tx, {
+        kind: 'psp_fee',
+        refType: 'order',
+        refId: payment.order_id,
+        memo: `payment fee for ${payment.order_number}`,
+        entries: [
+          { accountCode: ACCOUNTS.PSP_FEES, debit: feeMinor },
+          { accountCode: ACCOUNTS.PSP_RECEIVABLE, credit: feeMinor },
+        ],
+      });
+    }
 
     await tx.query(
       `insert into order_events (order_id, event, detail, actor_type)

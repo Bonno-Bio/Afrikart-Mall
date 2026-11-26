@@ -628,6 +628,8 @@ insert into chart_of_accounts (code, name, type) values
   -- Packaging used before it was reordered: a real debt to a real supplier, not
   -- a negative stock figure pretending the box was free.
   ('2030','Packaging accrual','liability'),
+  -- What a rider has earned and not yet been paid for the run they just did.
+  ('2040','Rider payable','liability'),
   ('3000','Retained earnings','equity'),
   ('4000','Commission revenue','revenue'),
   ('4010','Fulfilment revenue','revenue'),
@@ -966,6 +968,38 @@ create index on deliveries (order_id);
 create index on deliveries (rider_id, scheduled_date);
 create index on deliveries (status) where status in ('pending','assigned','out_for_delivery');
 create trigger deliveries_touch before update on deliveries for each row execute function set_updated_at();
+
+-- A run: one rider, one route, one day. The unit of cost is the trip, not the
+-- order — a rider is paid for the day whether the eleventh drop happens or not.
+create table last_mile_runs (
+  id              uuid primary key default gen_random_uuid(),
+  route_id        uuid references routes(id),
+  rider_id        uuid references riders(id),
+  run_date        date not null,
+  rider_pay_minor bigint not null default 0 check (rider_pay_minor >= 0),
+  fuel_minor      bigint not null default 0 check (fuel_minor >= 0),
+  status          text not null default 'open' check (status in ('open','closed')),
+  drops           integer not null default 0 check (drops >= 0),
+  cost_minor      bigint not null default 0 check (cost_minor >= 0),
+  note            text,
+  opened_at       timestamptz not null default now(),
+  closed_at       timestamptz,
+  closed_by       uuid references users(id)
+);
+create index on last_mile_runs (run_date, route_id);
+create index on last_mile_runs (status) where status = 'open';
+
+-- Cost lands on the orders that rode on the run, once each. The unique
+-- constraint is the idempotency: an order cannot be charged for two runs, and
+-- closing a run twice cannot double the cost of a drop.
+create table last_mile_allocations (
+  id             uuid primary key default gen_random_uuid(),
+  run_id         uuid not null references last_mile_runs(id) on delete restrict,
+  order_id       uuid not null unique references orders(id),
+  amount_minor   bigint not null check (amount_minor >= 0),
+  created_at     timestamptz not null default now()
+);
+create index on last_mile_allocations (run_id);
 
 -- What is already promised to a route on a given day, in drops, grams and millilitres.
 create or replace view route_load as
