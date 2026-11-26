@@ -25,6 +25,7 @@
  */
 import { AppError } from './errors.js';
 import { post, ACCOUNTS } from './ledger.js';
+import { vatFromInclusive, applyBps } from './money.js';
 
 /**
  * Split a purchase order's freight and duty across its lines, pro rata by line
@@ -382,11 +383,14 @@ export async function shelfReport(db) {
     db.query(
       `select p.id as product_id, p.title, p.status, p.catalog_tier, p.seller_id, s.trading_name as seller,
               v.id as variant_id, v.sku, v.price_minor, v.parcel_class, v.ownership,
+              coalesce(c.commission_bps, s.commission_bps) as commission_bps,
+              coalesce(c.fulfilment_bps, s.fulfilment_bps) as fulfilment_bps,
               coalesce(l.on_hand, 0)  as on_hand,
               coalesce(l.reserved, 0) as reserved,
               l.bin_code
          from products p
          join sellers s on s.id = p.seller_id
+         join categories c on c.id = p.category_id
          join product_variants v on v.product_id = p.id and v.is_active
          left join inventory_levels l on l.variant_id = v.id
         order by p.title, v.sku`,
@@ -397,7 +401,13 @@ export async function shelfReport(db) {
   const rows = productsRes.rows.map((row) => {
     const price = Number(row.price_minor);
     const cost = costs.get(row.variant_id)?.unitCostMinor ?? null;
-    const sellerSpreadMinor = cost === null ? null : price - cost;
+    // What the seller actually receives: price minus VAT, minus our commission
+    // and fulfilment fee. Comparing landed cost to the shelf price instead is
+    // how a shop talks itself into a seller who cannot survive.
+    const { netMinor } = vatFromInclusive(price);
+    const sellerNetMinor =
+      netMinor - applyBps(netMinor, Number(row.commission_bps)) - applyBps(netMinor, Number(row.fulfilment_bps));
+    const sellerSpreadMinor = cost === null ? null : sellerNetMinor - cost;
     return {
       productId: row.product_id,
       title: row.title,
@@ -407,10 +417,13 @@ export async function shelfReport(db) {
       ownership: row.ownership,
       sku: row.sku,
       priceMinor: price,
+      sellerNetMinor,
       landedUnitCostMinor: cost,
       sellerSpreadMinor,
       sellerSpreadBps:
-        sellerSpreadMinor === null || price === 0 ? null : Math.round((sellerSpreadMinor / price) * 10000),
+        sellerSpreadMinor === null || sellerNetMinor === 0
+          ? null
+          : Math.round((sellerSpreadMinor / sellerNetMinor) * 10000),
       onHand: Number(row.on_hand),
       reserved: Number(row.reserved),
       available: Number(row.on_hand) - Number(row.reserved),

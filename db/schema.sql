@@ -177,6 +177,12 @@ create table categories (
   licence_required     boolean not null default false,
   licence_authority    text,                        -- 'BOBS' | 'MRA' | 'BURS'
   restricted_ingredients text[] not null default '{}',
+  -- Commission is a category decision, not one rate for the whole shop.
+  -- Baby staples are thin and price-sensitive; cosmetics carry more. A single
+  -- rate either kills the seller in one aisle or leaves money in another.
+  -- Null means "use the seller's rate", so the seller remains the fallback.
+  commission_bps  integer check (commission_bps between 0 and 5000),
+  fulfilment_bps  integer check (fulfilment_bps between 0 and 5000),
   note      text
 );
 

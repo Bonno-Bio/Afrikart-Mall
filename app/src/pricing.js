@@ -55,10 +55,13 @@ export async function priceLines(db, items) {
               p.id as product_id, p.title, p.catalog_tier, p.status as product_status,
               s.id as seller_id, s.trading_name, s.commission_bps, s.fulfilment_bps,
               s.status as seller_status, s.can_list_express,
+              c.id as category_id, c.commission_bps as category_commission_bps,
+              c.fulfilment_bps as category_fulfilment_bps,
               il.on_hand, il.reserved
          from product_variants v
          join products p on p.id = v.product_id
          join sellers  s on s.id = p.seller_id
+         join categories c on c.id = p.category_id
          left join inventory_levels il on il.variant_id = v.id
         where v.id = $1`,
       [item.variantId],
@@ -96,8 +99,10 @@ export async function priceLines(db, items) {
     const unitPriceMinor = Number(row.price_minor);
     const lineSubtotalMinor = unitPriceMinor * item.quantity;
     const { netMinor, vatMinor } = vatFromInclusive(lineSubtotalMinor);
-    const commissionBps = Number(row.commission_bps);
-    const fulfilmentBps = Number(row.fulfilment_bps);
+    // The category rate wins where it is set; the seller rate is the fallback,
+    // so an unconfigured category behaves exactly as it did before.
+    const commissionBps = Number(row.category_commission_bps ?? row.commission_bps);
+    const fulfilmentBps = Number(row.category_fulfilment_bps ?? row.fulfilment_bps);
     const commissionMinor = applyBps(netMinor, commissionBps);
     const fulfilmentMinor = applyBps(netMinor, fulfilmentBps);
 
@@ -106,6 +111,7 @@ export async function priceLines(db, items) {
       productId: row.product_id,
       sellerId: row.seller_id,
       sellerName: row.trading_name,
+      categoryId: row.category_id,
       title: row.title,
       sku: row.sku,
       quantity: item.quantity,

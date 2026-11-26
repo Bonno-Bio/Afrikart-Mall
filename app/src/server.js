@@ -23,6 +23,7 @@ import {
   publicCatalogue,
   marginByOrder,
 } from './catalogue.js';
+import { payoutRun, payoutStatement, payoutsFor } from './payouts.js';
 
 export function verifyWebhookSignature(rawBody, signature, secret) {
   if (!secret) return false;
@@ -257,6 +258,42 @@ export function createApp({ db, webhookSecret = process.env.PSP_WEBHOOK_SECRET, 
     try {
       const limit = Math.min(Number(req.query.limit ?? 50) || 50, 500);
       res.json(await marginByOrder(db, { limit }));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // Seller payouts (AFR-42). The marketplace either pays or it is a shop with
+  // extra steps.
+  // -------------------------------------------------------------------------
+  app.post('/api/ops/payouts/run', async (req, res, next) => {
+    try {
+      const { sellerId, periodStart, periodEnd, bankReference } = req.body ?? {};
+      const result = await payoutRun(db, {
+        sellerId: sellerId ?? null,
+        periodStart: periodStart ?? null,
+        periodEnd: periodEnd ?? null,
+        bankReference: bankReference ?? null,
+        actorId: currentUser(req),
+      });
+      res.status(201).json(result);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  app.get('/api/ops/payouts/:id', async (req, res, next) => {
+    try {
+      res.json(await payoutStatement(db, { payoutId: req.params.id }));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  app.get('/api/sellers/:sellerId/payouts', async (req, res, next) => {
+    try {
+      res.json({ payouts: await payoutsFor(db, { sellerId: req.params.sellerId }) });
     } catch (err) {
       next(err);
     }

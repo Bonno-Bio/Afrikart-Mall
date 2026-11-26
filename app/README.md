@@ -13,7 +13,7 @@ npm install
 npm run migrate          # db/schema.sql → the database
 npm run seed:demo        # one seller, three SKUs, one route, three addresses
 npm start                # API on 0.0.0.0:4000
-npm test                 # 64 tests against real PostgreSQL 16
+npm test                 # 72 tests against real PostgreSQL 16
 ```
 
 ## What it runs on
@@ -64,6 +64,9 @@ npm test                 # 64 tests against real PostgreSQL 16
 | POST | `/api/ops/products/{id}/publish` | refuses an uncosted SKU, a missing photo, an unlicensed category |
 | POST | `/api/ops/purchase-orders/{number}/receive` | stock + movements + ledger in one transaction |
 | GET | `/api/ops/margin` | realised margin per delivered order |
+| POST | `/api/ops/payouts/run` | pays sellers what the ledger says we owe, from their order lines |
+| GET | `/api/ops/payouts/{id}` | the statement a seller can add up themselves |
+| GET | `/api/sellers/{id}/payouts` | payout history |
 
 Errors always use the envelope from `docs/spec/api-contract.md`:
 `{ "error": { "code", "message", "field?", "request_id" } }`.
@@ -116,7 +119,7 @@ src/
   refunds.js        two channels, exact reversal, restock rules
   invoice.js        immutable VAT invoice
   server.js         the API
-test/               64 tests: money, ledger, orders, payments, refunds, shelf, HTTP
+test/               72 tests: money, ledger, orders, payments, refunds, shelf, payouts, HTTP
 ```
 
 ## The two bugs this harness found on day one

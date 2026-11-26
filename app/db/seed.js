@@ -51,8 +51,11 @@ export async function seed(db) {
   );
 
   await db.query(
-    `insert into categories (id, slug, name, licence_required, licence_authority, restricted_ingredients)
-     values ($1, 'baby-mother', 'Baby & Mother', true, 'BOBS', '{}')`,
+    // 8% + 4%, not 12% + 6%: at one rate for the whole shop, all three opening
+    // SKUs lost the seller money. Baby staples cannot carry an 18% take.
+    `insert into categories (id, slug, name, licence_required, licence_authority, restricted_ingredients,
+                             commission_bps, fulfilment_bps)
+     values ($1, 'baby-mother', 'Baby & Mother', true, 'BOBS', '{}', 800, 400)`,
     [IDS.category],
   );
 
